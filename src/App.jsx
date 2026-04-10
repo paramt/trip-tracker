@@ -17,7 +17,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const gpsPhotos = rawPhotos
   .filter(p => p.lat != null && p.lng != null)
   .sort((a, b) => (a.datetime ?? '').localeCompare(b.datetime ?? ''))
-  .map(p => ({ ...p, file: base + p.file, thumb: base + p.thumb }));
+  .map(p => ({ ...p, file: base + p.file, thumb: base + p.thumb, _rotate: (Math.random() - 0.5) * 8 }));
 
 // Marker entries — one per GPS photo
 const allCoords = gpsPhotos.map(p => ({ lat: p.lat, lng: p.lng, event: p }));
@@ -34,10 +34,10 @@ const globalRoute = (() => {
 
 export default function App() {
   const [hoveredPhoto, setHoveredPhoto] = useState(null);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [expandedPhoto, setExpandedPhoto] = useState(null);
   const boundsRef = useRef(null);
 
-  const activePhoto = hoveredPhoto ?? selectedPhoto;
+  const activePhoto = hoveredPhoto;
   const popupPos = activePhoto && boundsRef.current ? (() => {
     const xPct = projX(activePhoto.lng, boundsRef.current) * 100;
     const yPct = projY(activePhoto.lat, boundsRef.current) * 100;
@@ -69,27 +69,52 @@ export default function App() {
               noZoom={true}
               onMarkerHover={photo => setHoveredPhoto(photo)}
               onMarkerLeave={() => setHoveredPhoto(null)}
-              onMarkerClick={photo => setSelectedPhoto(prev => {
-                if (prev === photo) { setHoveredPhoto(null); return null; }
-                return photo;
-              })}
+              onMarkerClick={photo => setExpandedPhoto(prev => prev === photo ? null : photo)}
               onBoundsChange={b => { boundsRef.current = b; }}
-              selectedEvent={selectedPhoto}
+              selectedEvent={expandedPhoto}
               hoveredEvent={hoveredPhoto}
             />
-            {activePhoto && popupPos && (
+            {activePhoto && popupPos && !expandedPhoto && (
               <div className="map-photo-popup" style={popupPos}>
                 <Polaroid
-                  src={activePhoto.file}
-                  thumb={activePhoto.thumb}
+                  src={activePhoto.thumb}
                   w={activePhoto.width}
                   h={activePhoto.height}
                   date={formatDate(activePhoto.datetime)}
                   location={activePhoto.location ?? null}
+                  rotate={activePhoto._rotate}
                   color
                   static
                   tack={false}
                 />
+              </div>
+            )}
+            {expandedPhoto && (
+              <div
+                className="polaroid-overlay"
+                onClick={() => setExpandedPhoto(null)}
+              >
+                <button
+                  className="polaroid-overlay-close"
+                  onClick={() => setExpandedPhoto(null)}
+                  aria-label="Close"
+                >✕</button>
+                <div
+                  className="polaroid-expanded"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <Polaroid
+                    src={expandedPhoto.file}
+                    thumb={expandedPhoto.thumb}
+                    w={expandedPhoto.width}
+                    h={expandedPhoto.height}
+                    date={formatDate(expandedPhoto.datetime)}
+                    location={expandedPhoto.location ?? null}
+                    rotate={expandedPhoto._rotate}
+                    color
+                    tack={false}
+                  />
+                </div>
               </div>
             )}
           </>

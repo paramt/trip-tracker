@@ -38,6 +38,16 @@ If you include `glyphs: ""` in a custom style object, MapLibre throws `"glyphs" 
 ### Popup positioning
 `App.jsx` positions the Polaroid popup using `projX(photo.lng, boundsRef.current)` and `projY(photo.lat, boundsRef.current)`. `boundsRef` is updated via `onBoundsChange` on every `map.on('move')` event so the popup tracks in real time during pan/zoom.
 
+### Expanded Polaroid overlay
+Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the photo centered and enlarged. Key design decisions:
+
+- **Thumbnail-only popup**: The small hover popup passes `src={photo.thumb}` with no `thumb` prop — this prevents the full image from ever being fetched for the preview. The `thumb` prop on `<Polaroid>` is only for progressive loading (thumb → full crossfade), so omitting it when `src` is already the thumb avoids loading the full image unnecessarily.
+- **Stable rotation angle**: `_rotate` is computed once at module level (in the `gpsPhotos.map()`) and passed as the `rotate` prop to both the hover popup and the expanded Polaroid. Without this, `Polaroid` picks a new random angle on each mount, so the popup and expanded views would tilt differently.
+- **Overlay dismissal**: The backdrop `onClick` closes the overlay; `e.stopPropagation()` on the inner `div.polaroid-expanded` prevents clicks on the photo itself from bubbling up to the backdrop handler.
+- **No hover popup while expanded**: `{activePhoto && popupPos && !expandedPhoto && ...}` hides the hover popup when the overlay is open.
+- **Width override**: `.polaroid-expanded .polaroid { width: min(480px, 85vw) }` overrides the fixed `260px` set on `.polaroid`. Put this after the base `.polaroid` rule so specificity works.
+- **Spring animation**: `cubic-bezier(0.34, 1.4, 0.64, 1)` gives the polaroid a slight overshoot for a snappy feel. The `@keyframes polaroidExpand` scales from `0.25` to `1` — keep `transform: scale(1)` in the `to` frame, not `transform: none`, or it may conflict with the rotation applied via `--polaroid-rotate`.
+
 ## Road-snapped routing
 
 The route follows actual roads via **OSRM** (Open Source Routing Machine). Routing happens at process time in `process.js`, not in the browser.

@@ -3,6 +3,7 @@ import '@fontsource-variable/caveat';
 import WorldMap, { projX, projY } from './components/WorldMap';
 import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
+import rawRoute from './data/route.json';
 
 function formatDate(datetime) {
   if (!datetime) return null;
@@ -21,10 +22,15 @@ const gpsPhotos = rawPhotos
 // Marker entries — one per GPS photo
 const allCoords = gpsPhotos.map(p => ({ lat: p.lat, lng: p.lng, event: p }));
 
-// Full trip route line
-const globalRoute = gpsPhotos.length > 1
-  ? [gpsPhotos.map(p => ({ lat: p.lat, lng: p.lng }))]
-  : [];
+// Road-snapped route from process.js; fall back to straight lines if not yet generated
+const globalRoute = (() => {
+  const coords = rawRoute?.coordinates;
+  if (Array.isArray(coords) && coords.length > 1)
+    return [coords.map(([lng, lat]) => ({ lat, lng }))];
+  return gpsPhotos.length > 1
+    ? [gpsPhotos.map(p => ({ lat: p.lat, lng: p.lng }))]
+    : [];
+})();
 
 export default function App() {
   const [hoveredPhoto, setHoveredPhoto] = useState(null);

@@ -1,17 +1,65 @@
 # Route 66 — Project Notes
 
 ## What this is
-React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process`, and every GPS-tagged photo is plotted on the map.
+React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process`, and every GPS-tagged photo is plotted on the map with a road-snapped route connecting them.
 
 ## Workflow
 1. Drop photos (JPG, HEIC, PNG) into `public/photos/`
-2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, writes `src/data/photos.json`
+2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, fetches road-snapped route from OSRM, writes `src/data/photos.json` and `src/data/route.json`
 3. `npm run dev` — view the map
 
 ## Architecture
-- **Map UI**: `WorldMap.jsx`, `Polaroid.jsx`, `Tack.jsx` adapted from `../paramt.github.io`. `App.jsx` drives everything from `photos.json`.
-- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `App.jsx` filters to GPS-tagged photos, sorts chronologically, and plots one marker per photo.
+- **Map UI**: `WorldMap.jsx` (MapLibre GL JS), `Polaroid.jsx`, `Tack.jsx`. `App.jsx` drives everything from `photos.json` and `route.json`.
+- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `process.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty).
 - **Image serving**: Photos live in `public/photos/` and are served by Vite as static assets at `/photos/...`. Thumbnails are WebP format (`.thumb.webp`).
+
+## Map rendering — MapLibre GL JS
+
+The map uses **MapLibre GL JS** (WebGL, GPU-accelerated) with **OpenFreeMap positron tiles** (`https://tiles.openfreemap.org/styles/positron`). This replaced a custom canvas renderer that was CPU-bound and laggy on mobile.
+
+- Style URL is set as `OFM_STYLE` constant in `WorldMap.jsx` — swap to `liberty` or `bright` for a different look
+- Route line and markers are our own layers/elements on top of the OpenFreeMap base
+- `projX`/`projY` are still exported from `WorldMap.jsx` and used by `App.jsx` to position the photo popup. They take `{ lngMin, lngMax, latMin, latMax }` which `onBoundsChange` emits from `map.getBounds()` on every `move` event
+- Markers are `maplibregl.Marker` instances with custom DOM elements (`anchor: 'center'`). `.map-marker` CSS must NOT have `transform: translate(-50%, -50%)` — MapLibre's anchor handles centering
+- `map.dragRotate.disable()` and `map.touchZoomRotate.disableRotation()` keep the map north-up
+
+### MapLibre + React StrictMode gotcha
+In dev, StrictMode mounts → unmounts → remounts. On the second mount, `markersRef.current` (a `Map<event, Marker>`) still has entries from the first mount (attached to the now-removed map), so the marker sync effect skips creating new ones. Fix: clear `markersRef.current` in the map init `useEffect` cleanup alongside `map.remove()`.
+
+### Route layer — layout vs paint properties
+`line-cap` and `line-join` are **layout** properties in MapLibre, not paint. Putting them in `paint` causes a silent validation error that prevents the layer from rendering at all. Always use:
+```js
+map.addLayer({ ..., layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ..., 'line-width': ... } });
+```
+
+### MapLibre style — glyphs field
+If you include `glyphs: ""` in a custom style object, MapLibre throws `"glyphs" url must include a "{fontstack}" token`. Omit `glyphs` entirely when there are no symbol/label layers.
+
+### Popup positioning
+`App.jsx` positions the Polaroid popup using `projX(photo.lng, boundsRef.current)` and `projY(photo.lat, boundsRef.current)`. `boundsRef` is updated via `onBoundsChange` on every `map.on('move')` event so the popup tracks in real time during pan/zoom.
+
+## Road-snapped routing
+
+The route follows actual roads via **OSRM** (Open Source Routing Machine). Routing happens at process time in `process.js`, not in the browser.
+
+### How it works
+1. After sorting all GPS photos chronologically, `process.js` calls `fetchRoadRouteBatched(gpsWaypoints)`
+2. OSRM endpoint: `https://router.project-osrm.org/route/v1/driving/{lng,lat;...}?overview=full&geometries=geojson`
+3. Returns `[[lng, lat], ...]` coordinates — a full-resolution road-following polyline
+4. Written to `src/data/route.json` as `{ waypointHash, coordinates }`
+5. `App.jsx` imports `route.json` and converts `[lng, lat]` pairs to `{ lat, lng }` objects for `WorldMap`
+
+### Caching
+`process.js` computes `waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]))` and compares it to the stored hash. If unchanged and `coordinates` is non-empty, the OSRM fetch is skipped.
+
+### Batching
+`fetchRoadRouteBatched` splits requests into chunks of 100 waypoints with 1-waypoint overlap between chunks (to avoid gaps at joins). Each batch waits 1s before the next to be polite to the demo server.
+
+### Retries + timeout
+`fetchRoadRoute` retries up to 2 times with 3s/6s backoff. Timeout is 300s (5 minutes) per request — long routes like Ottawa → San Francisco take significant time to compute. The OSRM demo server sometimes returns 504 on the first attempt; retries handle this reliably.
+
+### Fallback
+If OSRM fails after all retries, `process.js` writes `coordinates: []` to `route.json` and continues without crashing. `App.jsx` detects the empty array and falls back to straight lines between photo coordinates (the original behavior).
 
 ## HEIC support — what didn't work, what did
 
@@ -48,35 +96,3 @@ When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up
 
 ### Metadata cache for CI
 `process.js` loads the existing `photos.json` as a cache keyed by filename. If a photo's metadata is already present (has GPS or a confirmed datetime), EXIF extraction is skipped — it reads from the cache instead. This lets CI re-run `process.js` even when the original HEIC files aren't committed, as long as `photos.json` is committed. Reverse geocode results are also cached this way to avoid redundant Nominatim API calls.
-
-## WorldMap rendering
-
-### Projection: Mercator
-The map uses Web Mercator — `projX = (lng - lngMin) / lngSpan`, `projY = (mercY(latMax) - mercY(lat)) / (mercY(latMax) - mercY(latMin))` where `mercY(lat) = ln(tan(π/4 + lat·π/360))`. Mercator is conformal: shapes look correct everywhere regardless of where you pan. `adjustBoundsToAspect(b, w, h)` derives `latMin`/`latMax` from `lngSpan` by keeping the Mercator y-span proportional to the canvas: `mercYspan = lngSpan * π/180 * h/w`, then inverting via `invMercY(y) = (2·atan(eʸ) - π/2) · 180/π`.
-
-Equirectangular was used earlier and caused visible distortion as you panned north/south — the viewport's latitude range changed with `cos(latMid)`, making shapes stretch dynamically. Mercator was tried before that but rejected because the original `sec(lat)` approximation in `adjustBoundsToAspect` blew up near the poles. The current implementation is correct: Mercator math is exact, and the ±85° lat clamp prevents any pole-adjacent weirdness.
-
-All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
-
-### Marker alignment — two sources of truth
-JSX inline styles (`style={{ left, top }}`) use `curBounds.current` (raw bounds) for initial render, but the canvas draws with `ab` (aspect-adjusted bounds). These give different `projY` values. Fix: a `useLayoutEffect` with no dependency array calls `renderFrame(curBounds.current)` after every React render, synchronously before paint, so the imperatively-set `ab`-correct styles always win before the user sees anything.
-
-### Map resolution
-- World countries: `world-atlas@2/countries-10m.json` (1:10M, highest available) — fetched from jsDelivr CDN
-- US states: `us-atlas@3/states-10m.json` (1:10M) — fetched from jsDelivr CDN
-- Canadian provinces: `public/canada-provinces.geojson` — bundled locally (GeoJSON, WGS84, 13 provinces/territories sourced from codeforamerica/click_that_hood)
-- State/province polygons are always filled with the land color, overlaying the world atlas. This gives crisp US coastlines and Canadian province boundaries at all zoom levels. State/province border lines fade in separately starting at zoom 5×.
-
-### Canadian provinces use GeoJSON, not TopoJSON
-Unlike `us-atlas` (TopoJSON with quantized coordinates + `transform`), the Canada layer uses a plain GeoJSON FeatureCollection. It has its own renderer (`drawProvinces`) that directly projects `[lng, lat]` coordinate pairs via `projX`/`projY`, bypassing the `buildArcs`/`tracePath` TopoJSON pipeline.
-
-### Route line
-The route is straight canvas line segments connecting consecutive GPS photo coordinates in chronological order (`gpsPhotos.map(p => ({ lat, lng }))`), drawn with `lineTo` in `drawRoute`. No curve fitting, road snapping, or great-circle interpolation — straight lines between photo locations approximate the actual road well enough when photos are taken frequently. The route is drawn at 0.25 opacity when no active coords are selected, 1.0 when active. `lineCap/lineJoin: round` keeps corners and endpoints smooth.
-
-### Pan & zoom interaction
-All interaction updates `curBounds.current` directly and calls `renderFrame` immediately (cancelling any in-flight animation). Key math:
-- **Zoom**: compute `focalMercY` under cursor, scale `lngSpan`, derive `newLatMid = invMercY(newYMax - newYSpan/2)` — no iteration needed because Mercator math is linear in y-space
-- **Pan**: `dLng = -(dx/w) * lngSpan`, `dY = (dy/h) * mercYspan`, `newLatMid = invMercY(yMid + dY)` (drag down = pan north)
-- `clampBounds` enforces `lngSpan ∈ [5°, 300°]` and viewport edges within ±85° lat (in Mercator space)
-- Mouse/wheel events on canvas; `mousemove`/`mouseup` on `window` to handle drag-out
-- `touch-action: none` on canvas prevents browser scroll/zoom from intercepting touch events

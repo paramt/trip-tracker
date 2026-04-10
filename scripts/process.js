@@ -14,8 +14,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DUMP_DIR = path.join(__dirname, '../public/photos');
-const OUT_FILE = path.join(__dirname, '../src/data/photos.json');
+const DUMP_DIR    = path.join(__dirname, '../public/photos');
+const OUT_FILE    = path.join(__dirname, '../src/data/photos.json');
+const ROUTE_FILE  = path.join(__dirname, '../src/data/route.json');
 const THUMB_WIDTH = 400;
 const THUMB_QUALITY = 70;
 
@@ -33,6 +34,44 @@ async function reverseGeocode(lat, lng) {
   } catch {
     return null;
   }
+}
+
+async function fetchRoadRoute(waypoints, { retries = 2, timeoutMs = 300_000 } = {}) {
+  const coords = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      process.stdout.write(` (retry ${attempt})`);
+      await new Promise(r => setTimeout(r, 3000 * attempt));
+    }
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'route-66-photo-map/1.0' }, signal: AbortSignal.timeout(timeoutMs) });
+      if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates)
+        throw new Error(`OSRM error: ${data.code}`);
+      return data.routes[0].geometry.coordinates; // [[lng, lat], ...]
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+async function fetchRoadRouteBatched(waypoints) {
+  const BATCH = 100;
+  if (waypoints.length <= BATCH) return fetchRoadRoute(waypoints);
+  const segments = [];
+  for (let i = 0; i < waypoints.length - 1; i += BATCH - 1) {
+    const chunk = waypoints.slice(i, i + BATCH);
+    const coords = await fetchRoadRoute(chunk);
+    if (segments.length > 0) coords.shift(); // remove duplicate junction point
+    segments.push(...coords);
+    if (i + BATCH - 1 < waypoints.length - 1)
+      await new Promise(r => setTimeout(r, 1000));
+  }
+  return segments;
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.heic', '.png']);
@@ -229,6 +268,27 @@ async function main() {
 
   await writeFile(OUT_FILE, JSON.stringify(results, null, 2));
   console.log(`\nWrote ${results.length} entries → src/data/photos.json`);
+
+  // Road-snapped route via OSRM
+  const gpsWaypoints = results.filter(p => p.lat != null && p.lng != null);
+  if (gpsWaypoints.length > 1) {
+    const waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]));
+    let existingRoute = null;
+    try { existingRoute = JSON.parse(await readFile(ROUTE_FILE, 'utf8')); } catch {}
+    if (existingRoute?.waypointHash === waypointHash && existingRoute?.coordinates?.length > 0) {
+      console.log('Road route unchanged, skipping OSRM fetch.');
+    } else {
+      process.stdout.write('Fetching road-snapped route from OSRM...');
+      try {
+        const coordinates = await fetchRoadRouteBatched(gpsWaypoints);
+        await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates }, null, 2));
+        console.log(` ✓ ${coordinates.length} points → src/data/route.json`);
+      } catch (err) {
+        console.warn(`\n  Road routing failed (${err.message}), falling back to straight lines.`);
+        await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates: [] }, null, 2));
+      }
+    }
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

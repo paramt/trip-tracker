@@ -29,12 +29,14 @@ jobs:
 
       - run: npm run process
 
+      - run: npm run update-route || true
+
       - name: Commit generated files back to repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/data/photos.json public/photos/ src/data/route.json
-          git diff --staged --quiet || git commit -m "chore: update photos.json and thumbnails [skip ci]"
+          git diff --staged --quiet || git commit -m "autogenerate thumbnail, photo, and route data [skip ci]"
           git push
 
       - run: npm run build

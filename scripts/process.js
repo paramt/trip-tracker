@@ -36,7 +36,7 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
-async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = {}) {
+export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = {}) {
   const coords = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
   let lastErr;
@@ -54,12 +54,13 @@ async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = 
       return data.routes[0].geometry.coordinates; // [[lng, lat], ...]
     } catch (err) {
       lastErr = err;
+      process.stderr.write(`\n  attempt ${attempt + 1}/${retries + 1} failed: ${err.message}`);
     }
   }
   throw lastErr;
 }
 
-async function fetchRoadRouteBatched(waypoints) {
+export async function fetchRoadRouteBatched(waypoints) {
   const BATCH = 100;
   if (waypoints.length <= BATCH) return fetchRoadRoute(waypoints);
   const segments = [];
@@ -269,26 +270,8 @@ async function main() {
   await writeFile(OUT_FILE, JSON.stringify(results, null, 2));
   console.log(`\nWrote ${results.length} entries → src/data/photos.json`);
 
-  // Road-snapped route via OSRM
-  const gpsWaypoints = results.filter(p => p.lat != null && p.lng != null);
-  if (gpsWaypoints.length > 1) {
-    const waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]));
-    let existingRoute = null;
-    try { existingRoute = JSON.parse(await readFile(ROUTE_FILE, 'utf8')); } catch {}
-    if (existingRoute?.waypointHash === waypointHash && existingRoute?.coordinates?.length > 0) {
-      console.log('Road route unchanged, skipping OSRM fetch.');
-    } else {
-      process.stdout.write('Fetching road-snapped route from OSRM...');
-      try {
-        const coordinates = await fetchRoadRouteBatched(gpsWaypoints);
-        await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates }, null, 2));
-        console.log(` ✓ ${coordinates.length} points → src/data/route.json`);
-      } catch (err) {
-        console.warn(`\n  Road routing failed (${err.message}), falling back to straight lines.`);
-        await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates: [] }, null, 2));
-      }
-    }
-  }
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => { console.error(err); process.exit(1); });
+}

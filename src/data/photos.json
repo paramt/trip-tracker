@@ -128,5 +128,15 @@
     "width": 5712,
     "height": 4284,
     "location": "Waterloo, ON"
+  },
+  {
+    "file": "/photos/image.jpg",
+    "thumb": "/photos/image.thumb.webp",
+    "lat": null,
+    "lng": null,
+    "datetime": "2026-04-10T15:54:58",
+    "width": 2316,
+    "height": 3088,
+    "location": null
   }
 ]

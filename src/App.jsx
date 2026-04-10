@@ -10,10 +10,13 @@ function formatDate(datetime) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 // All GPS photos in chronological order
 const gpsPhotos = rawPhotos
   .filter(p => p.lat != null && p.lng != null)
-  .sort((a, b) => (a.datetime ?? '').localeCompare(b.datetime ?? ''));
+  .sort((a, b) => (a.datetime ?? '').localeCompare(b.datetime ?? ''))
+  .map(p => ({ ...p, file: base + p.file, thumb: base + p.thumb }));
 
 // Marker entries — one per GPS photo
 const allCoords = gpsPhotos.map(p => ({ lat: p.lat, lng: p.lng, event: p }));

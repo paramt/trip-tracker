@@ -100,6 +100,16 @@
     "location": "Mariposa County, CA"
   },
   {
+    "file": "/photos/IMG_4970.jpeg",
+    "thumb": "/photos/IMG_4970.thumb.webp",
+    "lat": 40.76056388888889,
+    "lng": -73.9711138888889,
+    "datetime": "2026-03-20T09:24:52.000",
+    "width": 3024,
+    "height": 4032,
+    "location": "New York, NY"
+  },
+  {
     "file": "/photos/IMG_5088.jpeg",
     "thumb": "/photos/IMG_5088.thumb.webp",
     "lat": 45.321583333333336,

@@ -77,11 +77,13 @@ function lerpBounds(a, b, t) {
 }
 
 // Equirectangular projection — linear lat/lng, no pole distortion.
-// lngSpan/latSpan = w/h for an undistorted display.
+// cos(latMid) corrects for longitude convergence: 1° lng is shorter than 1° lat
+// at non-zero latitudes, so we show proportionally less latSpan to match real shapes.
 function adjustBoundsToAspect(b, w, h) {
   const lngSpan = b.lngMax - b.lngMin;
   const latMid  = (b.latMax + b.latMin) / 2;
-  const latSpan = lngSpan * h / w;
+  const cosLat  = Math.cos(latMid * Math.PI / 180);
+  const latSpan = lngSpan * h / w * cosLat;
   return {
     lngMin: b.lngMin,
     lngMax: b.lngMax,

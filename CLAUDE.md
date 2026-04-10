@@ -51,11 +51,8 @@ When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up
 
 ## WorldMap rendering
 
-### Projection: equirectangular (not Mercator)
-The map uses a simple equirectangular projection — `projX = (lng - lngMin) / lngSpan`, `projY = 1 - (lat - latMin) / latSpan`. Mercator was tried first but causes visible compression as you pan toward the poles and requires a `sec(lat)` correction factor in `adjustBoundsToAspect` that behaves poorly at high latitudes. Equirectangular looks natural at US/CA latitudes and pans uniformly everywhere.
-
-### Aspect ratio correction
-`adjustBoundsToAspect(b, w, h)` fixes `lngMin`/`lngMax` and derives `latMin`/`latMax` so the map fills the canvas without stretching: `latSpan = lngSpan * h / w`. The canvas aspect ratio only affects how much latitude is shown above/below — content is never distorted. All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
+### Projection: equirectangular with latitude correction
+The map uses equirectangular projection — `projX = (lng - lngMin) / lngSpan`, `projY = 1 - (lat - latMin) / latSpan`. `adjustBoundsToAspect(b, w, h)` derives `latSpan` from `lngSpan` so the canvas fills correctly: `latSpan = lngSpan * h / w * cos(latMid)`. The `cos(latMid)` factor corrects for longitude convergence — at 40°N, 1° of longitude is only ~77% as wide as 1° of latitude, so without it the US appears horizontally stretched. All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
 
 ### Marker alignment — two sources of truth
 JSX inline styles (`style={{ left, top }}`) use `curBounds.current` (raw bounds) for initial render, but the canvas draws with `ab` (aspect-adjusted bounds). These give different `projY` values. Fix: a `useLayoutEffect` with no dependency array calls `renderFrame(curBounds.current)` after every React render, synchronously before paint, so the imperatively-set `ab`-correct styles always win before the user sees anything.

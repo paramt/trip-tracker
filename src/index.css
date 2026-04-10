@@ -90,6 +90,7 @@ code {
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: hidden;
 }
 
 .map-full .world-map {

@@ -57,10 +57,15 @@ export default function App() {
     let xShift = '-50%';
     if (xPct < 15) xShift = '0%';
     else if (xPct > 85) xShift = '-100%';
+    // Flip popup above the pin when it would overflow the bottom of the screen.
+    // Polaroid renders at 260px wide; compute its rendered height from the photo's aspect ratio.
+    // Add 40px buffer: photos are rotated up to ±4° which increases their bounding box height
+    const popupHeightPct = (260 * (activePhoto.height / activePhoto.width) + 40) / window.innerHeight * 100;
+    const yShift = yPct + popupHeightPct > 100 ? 'calc(-100% - 24px)' : '18px';
     return {
       left: `${xPct}%`,
       top: `${yPct}%`,
-      transform: `translateX(${xShift}) translateY(18px)`,
+      transform: `translateX(${xShift}) translateY(${yShift})`,
     };
   })() : null;
 

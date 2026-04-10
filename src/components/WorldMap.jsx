@@ -385,14 +385,20 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
     const focalLng = ab.lngMin + fx * lngSpan;
     const focalLat = ab.latMax - fy * latSpan; // projY is inverted (fy=0 → latMax)
 
-    // New spans after zoom — cos(focalLat) matches adjustBoundsToAspect's correction
     const newLngSpan = Math.min(MAX_LNG_SPAN, Math.max(MIN_LNG_SPAN, lngSpan / scaleFactor));
-    const newLatSpan = newLngSpan * h / w * Math.cos(focalLat * Math.PI / 180);
+
+    // adjustBoundsToAspect computes latSpan = K * cos(latMid), so newLatMid satisfies:
+    //   newLatMid = focalLat + (fy - 0.5) * K * cos(newLatMid)
+    // Solve with fixed-point iteration (converges in ~3 steps at US latitudes).
+    const K = newLngSpan * h / w;
+    let newLatMid = focalLat;
+    for (let i = 0; i < 3; i++) {
+      newLatMid = focalLat + (fy - 0.5) * K * Math.cos(newLatMid * Math.PI / 180);
+    }
 
     // Keep focal point fixed at its screen position
     const newLngMin = focalLng - fx * newLngSpan;
     const newLngMax = newLngMin + newLngSpan;
-    const newLatMid = focalLat + (fy - 0.5) * newLatSpan;
 
     const newB = boundsFromLngMid(newLngMin, newLngMax, newLatMid);
     curBounds.current = newB;

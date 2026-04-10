@@ -133,8 +133,8 @@ async function processImage(file) {
   }
 
   return {
-    file: `/dump/${serveFile}`,
-    thumb: `/dump/${thumbName}`,
+    file: `/photos/${serveFile}`,
+    thumb: `/photos/${thumbName}`,
     lat,
     lng,
     datetime,

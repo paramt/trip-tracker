@@ -59,7 +59,7 @@ export default function App() {
     if (xPct < 15) xShift = '0%';
     else if (xPct > 85) xShift = '-100%';
     // Scale popup with zoom: smaller when zoomed out, capped at 1 when zoomed in
-    const popupScale = Math.max(0.5, Math.min(1, zoomRef.current / 6));
+    const popupScale = Math.max(0.6, Math.min(1, zoomRef.current / 6));
     // Flip popup above the pin when it would overflow the bottom of the screen.
     // Polaroid renders at 260px wide; compute its rendered height from the photo's aspect ratio.
     // Add 40px buffer: photos are rotated up to ±4° which increases their bounding box height

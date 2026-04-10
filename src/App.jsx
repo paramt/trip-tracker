@@ -8,7 +8,7 @@ import rawRoute from './data/route.json';
 function formatDate(datetime) {
   if (!datetime) return null;
   const d = new Date(datetime);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
 }
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');

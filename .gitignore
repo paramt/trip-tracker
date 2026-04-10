@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+
+# Raw photos and generated thumbnails (don't commit)
+public/dump/*.jpg
+public/dump/*.JPG
+public/dump/*.jpeg
+public/dump/*.JPEG
+public/dump/*.heic
+public/dump/*.HEIC
+public/dump/*.png
+public/dump/*.PNG
+public/dump/*.webp

@@ -28,6 +28,7 @@ function fetchStates() {
 const WORLD = { lngMin: -180, lngMax: 180,  latMin: -58, latMax: 80 };
 const NA    = { lngMin: -173, lngMax:  -26, latMin:  22, latMax: 73 };
 const CA    = { lngMin: -134, lngMax: -108, latMin:  32, latMax: 44 };
+const US    = { lngMin: -125, lngMax:  -66, latMin:  24, latMax: 50 };
 const ANIM_DURATION = 500;
 
 function isCalifornia(lat, lng)   { return lat >= 32 && lat <= 42 && lng >= -125 && lng <= -114; }
@@ -67,8 +68,8 @@ function mercY(lat) {
   const r = (lat * Math.PI) / 180;
   return Math.log(Math.tan(Math.PI / 4 + r / 2));
 }
-function projX(lng, b) { return (lng - b.lngMin) / (b.lngMax - b.lngMin); }
-function projY(lat, b) {
+export function projX(lng, b) { return (lng - b.lngMin) / (b.lngMax - b.lngMin); }
+export function projY(lat, b) {
   const y = mercY(lat), yMin = mercY(b.latMin), yMax = mercY(b.latMax);
   return 1 - (y - yMin) / (yMax - yMin);
 }
@@ -160,19 +161,13 @@ function drawRoute(ctx, pts, w, h, b, alpha = 0.55) {
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(px[0], py[0]);
-  if (pts.length === 2) {
-    ctx.lineTo(px[1], py[1]);
-  } else {
-    // Smooth corners: quadratic bezier with each waypoint as control point,
-    // passing through the midpoints between consecutive waypoints.
-    ctx.lineTo((px[0] + px[1]) / 2, (py[0] + py[1]) / 2);
-    for (let i = 1; i < pts.length - 1; i++) {
-      ctx.quadraticCurveTo(px[i], py[i], (px[i] + px[i + 1]) / 2, (py[i] + py[i + 1]) / 2);
-    }
-    ctx.lineTo(px[pts.length - 1], py[pts.length - 1]);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(px[i], py[i]);
   }
   ctx.strokeStyle = '#eb4034';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.globalAlpha = alpha;
   ctx.stroke();
   ctx.restore();
@@ -180,7 +175,7 @@ function drawRoute(ctx, pts, w, h, b, alpha = 0.55) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 // coords: { lat, lng } | Array<{ lat, lng }> | null
-export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoom = false, onMarkerHover, onMarkerLeave, onMarkerClick }) {
+export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoom = false, onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange, selectedEvent, children }) {
   // Normalise coords to an array (or null) for uniform handling
   const coordsPts = coords ? (Array.isArray(coords) ? coords : [coords]) : null;
 
@@ -198,10 +193,12 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   const allCoordsRef       = useRef(allCoords);
   const allRoutesRef       = useRef(allRoutes);
   const noZoomRef          = useRef(noZoom);
+  const onBoundsChangeRef  = useRef(onBoundsChange);
   coordsPtsRef.current   = coordsPts;
   allCoordsRef.current   = allCoords;
   allRoutesRef.current   = allRoutes;
   noZoomRef.current      = noZoom;
+  onBoundsChangeRef.current = onBoundsChange;
 
   function renderFrame(b) {
     const canvas = canvasRef.current;
@@ -229,7 +226,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
           });
         }
         // Active route on top at full opacity
-        if (activePts && activePts.length > 1) drawRoute(ctx, activePts, w, h, b, 0.55);
+        if (activePts && activePts.length > 1) drawRoute(ctx, activePts, w, h, b, 1.0);
       }
     }
 
@@ -253,6 +250,8 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
         children[i].style.top  = `${projY(allPts[i].lat, b) * 100}%`;
       }
     }
+
+    onBoundsChangeRef.current?.(b);
   }
 
   function animateTo(target) {
@@ -290,7 +289,11 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    animateTo(noZoom ? WORLD : targetBoundsFor(coordsPts));
+    if (noZoom) {
+      animateTo(US);
+    } else {
+      animateTo(targetBoundsFor(coordsPts));
+    }
   }, [coords, noZoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -318,7 +321,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
           {allCoords.map((c, i) => (
             <div
               key={i}
-              className="map-marker map-marker-static"
+              className={`map-marker map-marker-static${c.event === selectedEvent ? ' map-marker-selected' : ''}`}
               style={{
                 left: `${projX(c.lng, curBounds.current) * 100}%`,
                 top:  `${projY(c.lat, curBounds.current) * 100}%`,
@@ -332,6 +335,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
           ))}
         </div>
       )}
+      {children}
     </div>
   );
 }

@@ -14,7 +14,10 @@
   --highlight-bg: #f7f7f7;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
-  --max-width: 720px;
+}
+
+html, body, #root {
+  height: 100%;
 }
 
 html {
@@ -49,122 +52,61 @@ code {
   border: 1px solid var(--border);
 }
 
-/* ── App Header ── */
-.app-header {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 48px 24px 0;
+/* ── App Layout ── */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-@media (min-width: 860px) {
-  .app-header {
-    max-width: calc(var(--max-width) + 380px + 56px);
-  }
+/* ── App Header ── */
+.app-header {
+  padding: 24px 24px 16px;
+  flex-shrink: 0;
 }
 
 .app-title {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .app-subtitle {
-  font-size: 15px;
+  font-size: 13px;
   color: var(--fg-muted);
-  margin-top: 4px;
-}
-
-/* ── Sections ── */
-.section {
-  padding: 48px 0 64px;
+  margin-top: 2px;
 }
 
 /* ── Empty State ── */
 .empty-state {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 0 24px;
+  padding: 24px;
   color: var(--fg-muted);
   font-size: 14px;
 }
 
-/* ── Timeline Layout ── */
-.timeline-section {
-  padding-left: 24px;
-  padding-right: 24px;
-}
-
-.timeline-layout {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  display: flex;
-  gap: 56px;
-  align-items: flex-start;
-}
-
-.timeline-col {
+/* ── Full-page Map ── */
+.map-full {
   flex: 1;
-  min-width: 0;
-}
-
-.timeline-map-col {
-  display: none;
-  width: 380px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 24px;
-  align-self: flex-start;
-}
-
-@media (min-width: 860px) {
-  .timeline-layout {
-    max-width: calc(var(--max-width) + 380px + 56px);
-  }
-
-  .timeline-map-col {
-    display: block;
-  }
-}
-
-/* ── Timeline Polaroids ── */
-.timeline-polaroids {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.timeline-polaroids .polaroid {
+  min-height: 0;
   position: relative;
-  flex-grow: 1;
 }
 
-/* ── Map Frame (tack + string + tilt) ── */
-.map-frame {
-  position: relative;
-  padding-top: 34px;
-  transform: rotate(2.5deg);
-  transform-origin: top center;
+.map-full .world-map {
+  height: 100%;
+  aspect-ratio: unset;
 }
 
-.map-string {
+/* ── Photo Popup (appears on marker hover/click) ── */
+.map-photo-popup {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 40px;
-  display: block;
+  z-index: 10;
   pointer-events: none;
-  overflow: visible;
 }
 
 /* ── World Map ── */
 .world-map {
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: 4px;
   overflow: hidden;
   aspect-ratio: 400 / 260;
 }
@@ -196,16 +138,17 @@ code {
 }
 
 .map-marker-static .map-marker-dot {
-  width: 5px;
-  height: 5px;
+  width: 12px;
+  height: 12px;
   background: #eb4034;
   opacity: 0.8;
   transition: width 0.15s, height 0.15s, opacity 0.15s;
 }
 
-.map-marker-static:hover .map-marker-dot {
-  width: 8px;
-  height: 8px;
+.map-marker-static:hover .map-marker-dot,
+.map-marker-selected .map-marker-dot {
+  width: 16px;
+  height: 16px;
   opacity: 1;
 }
 
@@ -228,122 +171,10 @@ code {
   100% { width: 28px; height: 28px; opacity: 0; }
 }
 
-/* ── Timeline ── */
-.timeline {
-  display: flex;
-  flex-direction: column;
-}
-
-.timeline-year-marker {
-  padding: 16px 0 4px;
-}
-
-.timeline-year {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--fg-muted);
-  padding: 4px 0;
-}
-
-.timeline-event {
-  display: grid;
-  grid-template-columns: 52px 1fr;
-  gap: 0 12px;
-  align-items: stretch;
-  scroll-margin-top: 24px;
-  scroll-margin-bottom: 16px;
-}
-
-.timeline-month {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--fg-faint);
-  text-align: right;
-  padding-top: 12px;
-  flex-shrink: 0;
-  position: relative;
-  isolation: isolate;
-}
-
-.timeline-month::before {
-  content: '';
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: -8px;
-  right: -12px;
-  background: #eb4034;
-  clip-path: polygon(8px 0%, 100% 0%, 100% 100%, 8px 100%, 0% 50%);
-  z-index: -1;
-  transform: scaleX(0);
-  transform-origin: right center;
-  transition: transform 0.2s ease;
-}
-
-.timeline-line-content {
-  border-left: 1px solid var(--border);
-  position: relative;
-  padding: 10px 0 10px 20px;
-}
-
-.timeline-dot {
-  position: absolute;
-  left: -4px;
-  top: 16px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border);
-  border: 1.5px solid var(--bg);
-  outline: 1px solid var(--border);
-  transition: background 0.15s, outline-color 0.15s;
-}
-
-.timeline-event--active .timeline-dot,
-.timeline-event--selected .timeline-dot {
-  background: #eb4034;
-  outline-color: #eb4034;
-}
-
-.timeline-event {
-  cursor: pointer;
-}
-
-.timeline--has-selection .timeline-event {
-  width: fit-content;
-}
-
-.timeline-event--selected .timeline-month {
-  color: #fff;
-  padding-right: 4px;
-}
-
-.timeline-event--selected .timeline-month::before {
-  transform: scaleX(1);
-}
-
-.timeline-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.timeline-title {
-  font-size: 14px;
-  color: var(--fg);
-  line-height: 1.4;
-}
-
-.timeline-count {
-  font-size: 12px;
-  color: var(--fg-faint);
-}
-
 /* ── Polaroid ── */
 .polaroid {
   flex-shrink: 0;
-  width: 180px;
+  width: 260px;
   background: #f0ede8;
   padding: 10px 10px 32px;
   box-shadow: 2px 4px 16px rgba(0,0,0,0.12);
@@ -454,11 +285,4 @@ code {
 .polaroid-date {
   font-size: 0.85rem;
   color: #888;
-}
-
-/* ── Responsive ── */
-@media (max-width: 600px) {
-  .polaroid {
-    display: none;
-  }
 }

@@ -14,10 +14,26 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DUMP_DIR = path.join(__dirname, '../public/dump');
+const DUMP_DIR = path.join(__dirname, '../public/photos');
 const OUT_FILE = path.join(__dirname, '../src/data/photos.json');
 const THUMB_WIDTH = 400;
 const THUMB_QUALITY = 70;
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'route-66-photo-map/1.0' } });
+    const data = await res.json();
+    const addr = data.address ?? {};
+    const city = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.suburb ?? addr.neighbourhood ?? addr.county ?? null;
+    const stateCode = addr['ISO3166-2-lvl4']?.split('-')[1] ?? null;
+    if (city && stateCode) return `${city}, ${stateCode}`;
+    if (city) return city;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.heic', '.png']);
 const HEIC_EXTS  = new Set(['.heic']);
@@ -133,6 +149,17 @@ async function main() {
     process.exit(1);
   }
 
+  // Cache previously geocoded locations to avoid re-fetching on re-runs
+  const locationCache = {};
+  if (existsSync(OUT_FILE)) {
+    try {
+      const existing = JSON.parse(await readFile(OUT_FILE, 'utf8'));
+      for (const entry of existing) {
+        if (entry.file && entry.location) locationCache[entry.file] = entry.location;
+      }
+    } catch {}
+  }
+
   const allFiles = await readdir(DUMP_DIR);
   const imageFiles = allFiles.filter(f => {
     const ext = path.extname(f).toLowerCase();
@@ -157,7 +184,21 @@ async function main() {
   for (const file of imageFiles) {
     process.stdout.write(`  ${file} ... `);
     const entry = await processImage(file);
-    const gpsStr = entry.lat != null ? `${entry.lat.toFixed(4)}, ${entry.lng.toFixed(4)}` : 'no GPS';
+
+    // Reverse geocode if GPS is available; use cache to skip re-fetching
+    if (entry.lat != null) {
+      if (locationCache[entry.file]) {
+        entry.location = locationCache[entry.file];
+      } else {
+        entry.location = await reverseGeocode(entry.lat, entry.lng);
+        // Nominatim rate limit: 1 req/s — wait regardless of result
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    } else {
+      entry.location = null;
+    }
+
+    const gpsStr = entry.lat != null ? (entry.location ?? `${entry.lat.toFixed(4)}, ${entry.lng.toFixed(4)}`) : 'no GPS';
     const dtStr = entry.datetime ?? 'no datetime';
     console.log(`✓  (${gpsStr} | ${dtStr})`);
     results.push(entry);

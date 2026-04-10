@@ -140,6 +140,16 @@
     "location": "Waterloo, ON"
   },
   {
+    "file": "/photos/IMG_5099.jpeg",
+    "thumb": "/photos/IMG_5099.thumb.webp",
+    "lat": 43.47352222222222,
+    "lng": -80.53749166666667,
+    "datetime": "2026-04-10T14:57:20.000",
+    "width": 2316,
+    "height": 3088,
+    "location": "Waterloo, ON"
+  },
+  {
     "file": "/photos/image.jpg",
     "thumb": "/photos/image.thumb.webp",
     "lat": null,

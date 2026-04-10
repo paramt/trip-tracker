@@ -3,6 +3,9 @@
 ## What this is
 React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process`, and every GPS-tagged photo is plotted on the map with a road-snapped route connecting them.
 
+## Git workflow
+Automated workflows frequently push commits to `main` (photo processing, thumbnail updates). Always `git pull` before committing or pushing to avoid rejected pushes.
+
 ## Workflow
 1. Drop photos (JPG, HEIC, PNG) into `public/photos/`
 2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, fetches road-snapped route from OSRM, writes `src/data/photos.json` and `src/data/route.json`
@@ -106,3 +109,8 @@ When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up
 
 ### Metadata cache for CI
 `process.js` loads the existing `photos.json` as a cache keyed by filename. If a photo's metadata is already present (has GPS or a confirmed datetime), EXIF extraction is skipped — it reads from the cache instead. This lets CI re-run `process.js` even when the original HEIC files aren't committed, as long as `photos.json` is committed. Reverse geocode results are also cached this way to avoid redundant Nominatim API calls.
+
+
+### CSS filter gotcha — ICC color profiles
+Applying *any* CSS `filter` (even `filter: grayscale(0%)`, which is visually a no-op) forces the browser into GPU compositing mode, which bypasses ICC color profile handling. Images with Display P3 or HDR gain maps render as sRGB, causing highlights to appear blown out. Color polaroids must use `filter: none`, not `filter: grayscale(0%)`
+

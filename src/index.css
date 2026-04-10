@@ -197,13 +197,9 @@ code {
 }
 
 .polaroid img {
-  filter: grayscale(70%) sepia(60%);
   transition: filter 0.4s ease, opacity 0.4s ease;
 }
 
-.polaroid-thumb {
-  filter: grayscale(70%) sepia(60%);
-}
 
 .polaroid-placeholder {
   position: absolute;
@@ -234,15 +230,6 @@ code {
   opacity: 0;
 }
 
-.polaroid:hover img {
-  filter: grayscale(0%) sepia(0%);
-}
-
-
-.polaroid-color img,
-.polaroid-color .polaroid-thumb {
-  filter: grayscale(0%);
-}
 
 .polaroid-video {
   position: absolute;

@@ -149,13 +149,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Cache previously geocoded locations to avoid re-fetching on re-runs
-  const locationCache = {};
+  // Load existing photos.json as a full metadata cache keyed by filename.
+  // This lets CI skip EXIF re-extraction for photos whose originals (HEIC) aren't committed.
+  const metaCache = {};
   if (existsSync(OUT_FILE)) {
     try {
       const existing = JSON.parse(await readFile(OUT_FILE, 'utf8'));
       for (const entry of existing) {
-        if (entry.file && entry.location) locationCache[entry.file] = entry.location;
+        if (entry.file) {
+          // Key by bare filename so it's path-independent
+          metaCache[path.basename(entry.file)] = entry;
+        }
       }
     } catch {}
   }
@@ -173,7 +177,7 @@ async function main() {
   });
 
   if (imageFiles.length === 0) {
-    console.log('No images found in public/dump/. Drop photos there and re-run.');
+    console.log('No images found in public/photos/. Drop photos there and re-run.');
     await writeFile(OUT_FILE, JSON.stringify([], null, 2));
     return;
   }
@@ -183,12 +187,22 @@ async function main() {
   const results = [];
   for (const file of imageFiles) {
     process.stdout.write(`  ${file} ... `);
-    const entry = await processImage(file);
+
+    const cached = metaCache[file];
+    // If we have a fully cached entry (has GPS or was confirmed no-GPS), skip EXIF extraction
+    const hasCachedMeta = cached && (cached.lat != null || cached.datetime != null);
+
+    let entry;
+    if (hasCachedMeta) {
+      entry = { ...cached };
+    } else {
+      entry = await processImage(file);
+    }
 
     // Reverse geocode if GPS is available; use cache to skip re-fetching
     if (entry.lat != null) {
-      if (locationCache[entry.file]) {
-        entry.location = locationCache[entry.file];
+      if (cached?.location) {
+        entry.location = cached.location;
       } else {
         entry.location = await reverseGeocode(entry.lat, entry.lng);
         // Nominatim rate limit: 1 req/s — wait regardless of result
@@ -200,7 +214,8 @@ async function main() {
 
     const gpsStr = entry.lat != null ? (entry.location ?? `${entry.lat.toFixed(4)}, ${entry.lng.toFixed(4)}`) : 'no GPS';
     const dtStr = entry.datetime ?? 'no datetime';
-    console.log(`✓  (${gpsStr} | ${dtStr})`);
+    const source = hasCachedMeta ? '(cached)' : '';
+    console.log(`✓  (${gpsStr} | ${dtStr}) ${source}`.trimEnd());
     results.push(entry);
   }
 

@@ -45,3 +45,29 @@ If EXIF datetime extraction still fails, fall back to `fs.stat().mtime`. iPhone 
 
 ### Auto-generated JPGs must be excluded from processing
 When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up in `public/dump/`. On re-run, the script would pick up the generated `.jpg` as a new image to process (creating a duplicate entry). Fix: skip any `.jpg`/`.jpeg` file that has a same-name `.heic` sibling in the directory.
+
+## WorldMap rendering
+
+### Projection: equirectangular (not Mercator)
+The map uses a simple equirectangular projection — `projX = (lng - lngMin) / lngSpan`, `projY = 1 - (lat - latMin) / latSpan`. Mercator was tried first but causes visible compression as you pan toward the poles and requires a `sec(lat)` correction factor in `adjustBoundsToAspect` that behaves poorly at high latitudes. Equirectangular looks natural at US/CA latitudes and pans uniformly everywhere.
+
+### Aspect ratio correction
+`adjustBoundsToAspect(b, w, h)` fixes `lngMin`/`lngMax` and derives `latMin`/`latMax` so the map fills the canvas without stretching: `latSpan = lngSpan * h / w`. The canvas aspect ratio only affects how much latitude is shown above/below — content is never distorted. All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
+
+### Marker alignment — two sources of truth
+JSX inline styles (`style={{ left, top }}`) use `curBounds.current` (raw bounds) for initial render, but the canvas draws with `ab` (aspect-adjusted bounds). These give different `projY` values. Fix: a `useLayoutEffect` with no dependency array calls `renderFrame(curBounds.current)` after every React render, synchronously before paint, so the imperatively-set `ab`-correct styles always win before the user sees anything.
+
+### Map resolution
+- World countries: `world-atlas@2/countries-10m.json` (1:10M, highest available)
+- US states: `us-atlas@3/states-10m.json` (1:10M)
+- State polygons are always filled with the land color, overlaying the world atlas. This gives crisp 10m US coastlines (Bay Area inlets, Florida Keys, etc.) at all zoom levels. State border lines fade in separately starting at zoom 5×.
+
+### Route line
+The route is straight canvas line segments connecting consecutive GPS photo coordinates in chronological order (`gpsPhotos.map(p => ({ lat, lng }))`), drawn with `lineTo` in `drawRoute`. No curve fitting, road snapping, or great-circle interpolation — straight lines between photo locations approximate the actual road well enough when photos are taken frequently. The route is drawn at 0.25 opacity when no active coords are selected, 1.0 when active. `lineCap/lineJoin: round` keeps corners and endpoints smooth.
+
+### Pan & zoom interaction
+All interaction updates `curBounds.current` directly and calls `renderFrame` immediately (cancelling any in-flight animation). Key math:
+- **Zoom**: fix focal longitude, scale `lngSpan`, keep `latMid` fixed
+- **Pan**: `dLng = -(dx/w) * lngSpan`, `dLat = (dy/h) * latSpan` (drag down = pan north)
+- Mouse/wheel events on canvas; `mousemove`/`mouseup` on `window` to handle drag-out
+- `touch-action: none` on canvas prevents browser scroll/zoom from intercepting touch events

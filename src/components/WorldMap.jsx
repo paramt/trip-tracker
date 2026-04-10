@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 // ── Country data (world-atlas, geographic lon/lat) ────────────────────────────
 let geoCache = null;
@@ -6,7 +6,7 @@ let geoPromise = null;
 function fetchGeo() {
   if (geoCache) return Promise.resolve(geoCache);
   if (geoPromise) return geoPromise;
-  geoPromise = fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+  geoPromise = fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json")
     .then((r) => r.json())
     .then((t) => { geoCache = t; return t; });
   return geoPromise;
@@ -64,15 +64,30 @@ function lerpBounds(a, b, t) {
   };
 }
 
-function mercY(lat) {
-  const r = (lat * Math.PI) / 180;
-  return Math.log(Math.tan(Math.PI / 4 + r / 2));
+// Equirectangular projection — linear lat/lng, no pole distortion.
+// lngSpan/latSpan = w/h for an undistorted display.
+function adjustBoundsToAspect(b, w, h) {
+  const lngSpan = b.lngMax - b.lngMin;
+  const latMid  = (b.latMax + b.latMin) / 2;
+  const latSpan = lngSpan * h / w;
+  return {
+    lngMin: b.lngMin,
+    lngMax: b.lngMax,
+    latMin: latMid - latSpan / 2,
+    latMax: latMid + latSpan / 2,
+  };
 }
+
+// ── Interaction helpers ───────────────────────────────────────────────────────
+// Bounds from lng range + a lat center (adjustBoundsToAspect only uses latMid)
+function boundsFromLngMid(lngMin, lngMax, latMid) {
+  return { lngMin, lngMax, latMin: latMid - 1, latMax: latMid + 1 };
+}
+const MIN_LNG_SPAN = 0.5;   // max zoom (~city level)
+const MAX_LNG_SPAN = 360;   // min zoom (full world)
+
 export function projX(lng, b) { return (lng - b.lngMin) / (b.lngMax - b.lngMin); }
-export function projY(lat, b) {
-  const y = mercY(lat), yMin = mercY(b.latMin), yMax = mercY(b.latMax);
-  return 1 - (y - yMin) / (yMax - yMin);
-}
+export function projY(lat, b) { return 1 - (lat - b.latMin) / (b.latMax - b.latMin); }
 
 // ── Generic arc-path renderer ─────────────────────────────────────────────────
 function buildArcs(topo, toScreen) {
@@ -133,24 +148,38 @@ function drawCountries(ctx, topo, w, h, isDark, bounds) {
   });
 }
 
-// ── US state border renderer ──────────────────────────────────────────────────
+// ── US state renderer ────────────────────────────────────────────────────────
+// Always fills state polygons with land color (high-res 10m coastline overlaid
+// on the coarser world atlas). State border lines fade in separately at zoom.
 function drawStates(ctx, topo, w, h, isDark, bounds, opacity) {
-  if (opacity <= 0 || !topo) return;
+  if (!topo) return;
 
   const arcs = buildArcs(topo, (lng, lat) => [projX(lng, bounds) * w, projY(lat, bounds) * h]);
 
-  ctx.strokeStyle = isDark ? `rgba(26,26,26,${opacity})` : `rgba(239,239,239,${opacity})`;
-  ctx.lineWidth = 0.6;
-
+  // Fill: replace rough world-atlas US coast with crisp 10m state polygons
+  ctx.fillStyle = isDark ? "#333333" : "#bebebe";
   eachGeom(topo.objects.states, (geom) => {
     const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
     arcSets.forEach((rings) => {
-      rings.forEach((ring) => {
-        tracePath(ctx, arcs, [ring], w);
-        ctx.stroke();
-      });
+      tracePath(ctx, arcs, rings, w);
+      ctx.fill("evenodd");
     });
   });
+
+  // Borders: fade in at higher zoom
+  if (opacity > 0) {
+    ctx.strokeStyle = isDark ? `rgba(26,26,26,${opacity})` : `rgba(239,239,239,${opacity})`;
+    ctx.lineWidth = 1.5;
+    eachGeom(topo.objects.states, (geom) => {
+      const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
+      arcSets.forEach((rings) => {
+        rings.forEach((ring) => {
+          tracePath(ctx, arcs, [ring], w);
+          ctx.stroke();
+        });
+      });
+    });
+  }
 }
 
 // ── Route polyline renderer ───────────────────────────────────────────────────
@@ -194,6 +223,9 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   const allRoutesRef       = useRef(allRoutes);
   const noZoomRef          = useRef(noZoom);
   const onBoundsChangeRef  = useRef(onBoundsChange);
+  const isDraggingRef      = useRef(false);
+  const dragStartRef       = useRef(null);
+  const lastTouchesRef     = useRef([]);
   coordsPtsRef.current   = coordsPts;
   allCoordsRef.current   = allCoords;
   allRoutesRef.current   = allRoutes;
@@ -211,47 +243,48 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
         canvas.height = h * dpr;
         const ctx = canvas.getContext("2d");
         ctx.scale(dpr, dpr);
-        drawCountries(ctx, topo, w, h, isDarkRef.current, b);
+        const ab = adjustBoundsToAspect(b, w, h);
+        drawCountries(ctx, topo, w, h, isDarkRef.current, ab);
 
-        // State borders fade in at CA zoom (≈14×) from zoom 5× onward
-        const zoom = 360 / (b.lngMax - b.lngMin);
+        // State fills always; borders fade in from zoom 5× onward
+        const zoom = 360 / (ab.lngMax - ab.lngMin);
         const stateOpacity = Math.min(1, Math.max(0, (zoom - 5) / 5));
-        drawStates(ctx, statesRef.current, w, h, isDarkRef.current, b, stateOpacity);
+        drawStates(ctx, statesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
 
         const activePts = coordsPtsRef.current;
         // Background routes: same visibility rule as static markers
         if (!activePts || noZoomRef.current) {
           allRoutesRef.current.forEach((route) => {
-            if (route !== activePts) drawRoute(ctx, route, w, h, b, 0.25);
+            if (route !== activePts) drawRoute(ctx, route, w, h, ab, 0.25);
           });
         }
         // Active route on top at full opacity
-        if (activePts && activePts.length > 1) drawRoute(ctx, activePts, w, h, b, 1.0);
+        if (activePts && activePts.length > 1) drawRoute(ctx, activePts, w, h, ab, 1.0);
+
+        const activeContainer = activeMarkersRef.current;
+        const pts = coordsPtsRef.current;
+        if (activeContainer && pts) {
+          const endpts = pts.length > 1 ? [pts[0], pts[pts.length - 1]] : pts;
+          const children = activeContainer.children;
+          for (let i = 0; i < children.length && i < endpts.length; i++) {
+            children[i].style.left = `${projX(endpts[i].lng, ab) * 100}%`;
+            children[i].style.top  = `${projY(endpts[i].lat, ab) * 100}%`;
+          }
+        }
+
+        const staticContainer = staticMarkersRef.current;
+        if (staticContainer && (!coordsPtsRef.current || noZoomRef.current)) {
+          const children = staticContainer.children;
+          const allPts = allCoordsRef.current;
+          for (let i = 0; i < children.length && i < allPts.length; i++) {
+            children[i].style.left = `${projX(allPts[i].lng, ab) * 100}%`;
+            children[i].style.top  = `${projY(allPts[i].lat, ab) * 100}%`;
+          }
+        }
+
+        onBoundsChangeRef.current?.(ab);
       }
     }
-
-    const activeContainer = activeMarkersRef.current;
-    const pts = coordsPtsRef.current;
-    if (activeContainer && pts) {
-      const endpts = pts.length > 1 ? [pts[0], pts[pts.length - 1]] : pts;
-      const children = activeContainer.children;
-      for (let i = 0; i < children.length && i < endpts.length; i++) {
-        children[i].style.left = `${projX(endpts[i].lng, b) * 100}%`;
-        children[i].style.top  = `${projY(endpts[i].lat, b) * 100}%`;
-      }
-    }
-
-    const staticContainer = staticMarkersRef.current;
-    if (staticContainer && (!coordsPtsRef.current || noZoomRef.current)) {
-      const children = staticContainer.children;
-      const allPts = allCoordsRef.current;
-      for (let i = 0; i < children.length && i < allPts.length; i++) {
-        children[i].style.left = `${projX(allPts[i].lng, b) * 100}%`;
-        children[i].style.top  = `${projY(allPts[i].lat, b) * 100}%`;
-      }
-    }
-
-    onBoundsChangeRef.current?.(b);
   }
 
   function animateTo(target) {
@@ -267,6 +300,38 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
       if (raw < 1) rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
+  }
+
+  function applyZoom(canvas, focalClientX, focalClientY, scaleFactor) {
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const b = curBounds.current;
+    const ab = adjustBoundsToAspect(b, w, h);
+    const lngSpan = ab.lngMax - ab.lngMin;
+    const fx = (focalClientX - rect.left) / w;
+    const focalLng = ab.lngMin + fx * lngSpan;
+    const newSpan = Math.min(MAX_LNG_SPAN, Math.max(MIN_LNG_SPAN, lngSpan / scaleFactor));
+    const newLngMin = focalLng - fx * newSpan;
+    const newLngMax = newLngMin + newSpan;
+    const latMid = (ab.latMax + ab.latMin) / 2;
+    const newB = boundsFromLngMid(newLngMin, newLngMax, latMid);
+    curBounds.current = newB;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    renderFrame(newB);
+  }
+
+  function applyPanDelta(canvas, dx, dy) {
+    const { width: w, height: h } = canvas.getBoundingClientRect();
+    const ab = adjustBoundsToAspect(curBounds.current, w, h);
+    const lngSpan = ab.lngMax - ab.lngMin;
+    const latSpan = ab.latMax - ab.latMin;
+    const dLng = -(dx / w) * lngSpan;
+    const dLat =  (dy / h) * latSpan;  // drag down → pan north → latMid increases
+    const newB = boundsFromLngMid(ab.lngMin + dLng, ab.lngMax + dLng,
+                                  (ab.latMax + ab.latMin) / 2 + dLat);
+    curBounds.current = newB;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    renderFrame(newB);
   }
 
   useEffect(() => {
@@ -295,6 +360,90 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
       animateTo(targetBoundsFor(coordsPts));
     }
   }, [coords, noZoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fix marker alignment: JSX styles use curBounds (raw) but canvas uses ab (aspect-adjusted).
+  // Re-run renderFrame synchronously before every paint to keep marker DOM in sync.
+  useLayoutEffect(() => {
+    if (topoRef.current) renderFrame(curBounds.current);
+  }); // no deps — runs after every render
+
+  // ── Scroll / drag / touch interaction ────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function onWheel(e) {
+      e.preventDefault();
+      const scale = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      applyZoom(canvas, e.clientX, e.clientY, scale);
+    }
+
+    function onMouseDown(e) {
+      if (e.button !== 0) return;
+      isDraggingRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      canvas.style.cursor = 'grabbing';
+    }
+    function onMouseMove(e) {
+      if (!isDraggingRef.current) return;
+      const { x, y } = dragStartRef.current;
+      applyPanDelta(canvas, e.clientX - x, e.clientY - y);
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+    }
+    function onMouseUp() {
+      isDraggingRef.current = false;
+      canvas.style.cursor = 'grab';
+    }
+
+    function onTouchStart(e) {
+      e.preventDefault();
+      lastTouchesRef.current = Array.from(e.touches);
+    }
+    function onTouchMove(e) {
+      e.preventDefault();
+      const touches = Array.from(e.touches);
+      const prev = lastTouchesRef.current;
+      if (touches.length === 1 && prev.length === 1) {
+        applyPanDelta(canvas, touches[0].clientX - prev[0].clientX,
+                              touches[0].clientY - prev[0].clientY);
+      } else if (touches.length === 2 && prev.length === 2) {
+        const midX = (touches[0].clientX + touches[1].clientX) / 2;
+        const midY = (touches[0].clientY + touches[1].clientY) / 2;
+        const prevMidX = (prev[0].clientX + prev[1].clientX) / 2;
+        const prevMidY = (prev[0].clientY + prev[1].clientY) / 2;
+        applyPanDelta(canvas, midX - prevMidX, midY - prevMidY);
+        const dist     = Math.hypot(touches[0].clientX - touches[1].clientX,
+                                    touches[0].clientY - touches[1].clientY);
+        const prevDist = Math.hypot(prev[0].clientX - prev[1].clientX,
+                                    prev[0].clientY - prev[1].clientY);
+        if (prevDist > 0) applyZoom(canvas, midX, midY, dist / prevDist);
+      }
+      lastTouchesRef.current = touches;
+    }
+    function onTouchEnd(e) {
+      lastTouchesRef.current = Array.from(e.touches);
+    }
+
+    canvas.style.cursor = 'grab';
+    canvas.addEventListener('wheel',      onWheel,      { passive: false });
+    canvas.addEventListener('mousedown',  onMouseDown);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',   onTouchEnd,   { passive: false });
+    window.addEventListener('mousemove',  onMouseMove);
+    window.addEventListener('mouseup',    onMouseUp);
+
+    return () => {
+      canvas.removeEventListener('wheel',      onWheel);
+      canvas.removeEventListener('mousedown',  onMouseDown);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove',  onTouchMove);
+      canvas.removeEventListener('touchend',   onTouchEnd);
+      window.removeEventListener('mousemove',  onMouseMove);
+      window.removeEventListener('mouseup',    onMouseUp);
+      canvas.style.cursor = '';
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="world-map">

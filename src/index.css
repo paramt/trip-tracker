@@ -117,14 +117,6 @@ code {
 .map-marker {
   position: absolute;
   pointer-events: none;
-  /* transform omitted — maplibregl.Marker anchor:"center" handles centering */
-}
-
-.map-marker-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #eb4034;
 }
 
 .map-marker-static {
@@ -132,18 +124,19 @@ code {
   cursor: pointer;
 }
 
-.map-marker-static .map-marker-dot {
-  width: 16px;
-  height: 16px;
-  background: #eb4034;
+.map-marker-pin {
+  width: var(--marker-size, 16px);
+  height: calc(var(--marker-size, 16px) * 1.33);
+  fill: #eb4034;
   opacity: 0.85;
-  transition: width 0.15s, height 0.15s, opacity 0.15s;
+  display: block;
+  transition: transform 0.15s, opacity 0.15s;
+  transform-origin: bottom center;
 }
 
-.map-marker-hovered .map-marker-dot,
-.map-marker-selected .map-marker-dot {
-  width: 22px;
-  height: 22px;
+.map-marker-hovered .map-marker-pin,
+.map-marker-selected .map-marker-pin {
+  transform: scale(1.375);
   opacity: 1;
 }
 
@@ -154,8 +147,8 @@ code {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 26px;
-    height: 26px;
+    width: calc(var(--marker-size, 16px) + 10px);
+    height: calc(var(--marker-size, 16px) * 1.33 + 10px);
   }
 }
 

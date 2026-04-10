@@ -84,9 +84,10 @@ function addRouteLayer(map, allRoutes) {
 function createMarkerEl(event, { onMarkerHover, onMarkerLeave, onMarkerClick }) {
   const div = document.createElement("div");
   div.className = "map-marker map-marker-static";
-  const dot = document.createElement("div");
-  dot.className = "map-marker-dot";
-  div.appendChild(dot);
+  div.innerHTML = `<svg class="map-marker-pin" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12,0 C5.373,0 0,5.373 0,12 C0,21 12,32 12,32 C12,32 24,21 24,12 C24,5.373 18.627,0 12,0 Z"/>
+    <circle cx="12" cy="11" r="4.5" fill="white" fill-opacity="0.45"/>
+  </svg>`;
   div.addEventListener("mouseenter", () => onMarkerHover?.(event));
   div.addEventListener("mouseleave", () => onMarkerLeave?.());
   div.addEventListener("click",      () => onMarkerClick?.(event));
@@ -140,6 +141,13 @@ export default function WorldMap({
 
     map.on("move", () => emitBoundsChange(map, onBoundsChangeRef.current));
 
+    const updateMarkerSize = () => {
+      const size = Math.max(10, Math.min(30, map.getZoom() * 2 + 6));
+      containerRef.current?.style.setProperty("--marker-size", `${size}px`);
+    };
+    map.on("zoom", updateMarkerSize);
+    map.on("load", updateMarkerSize);
+
     mapRef.current = map;
     return () => {
       for (const [, { marker }] of markersRef.current) marker.remove();
@@ -188,7 +196,7 @@ export default function WorldMap({
     for (const coord of allCoords) {
       if (!existing.has(coord.event)) {
         const el = createMarkerEl(coord.event, callbacksRef.current);
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([coord.lng, coord.lat])
           .addTo(map);
         existing.set(coord.event, { marker, el });

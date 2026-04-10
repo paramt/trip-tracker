@@ -204,7 +204,7 @@ function drawRoute(ctx, pts, w, h, b, alpha = 0.55) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 // coords: { lat, lng } | Array<{ lat, lng }> | null
-export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoom = false, onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange, selectedEvent, children }) {
+export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoom = false, onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange, selectedEvent, hoveredEvent, children }) {
   // Normalise coords to an array (or null) for uniform handling
   const coordsPts = coords ? (Array.isArray(coords) ? coords : [coords]) : null;
 
@@ -305,16 +305,28 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   function applyZoom(canvas, focalClientX, focalClientY, scaleFactor) {
     const rect = canvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
-    const b = curBounds.current;
-    const ab = adjustBoundsToAspect(b, w, h);
+    const ab = adjustBoundsToAspect(curBounds.current, w, h);
     const lngSpan = ab.lngMax - ab.lngMin;
+    const latSpan = ab.latMax - ab.latMin;
+
+    // Normalized cursor position [0,1]
     const fx = (focalClientX - rect.left) / w;
+    const fy = (focalClientY - rect.top)  / h;
+
+    // Geographic coords under cursor
     const focalLng = ab.lngMin + fx * lngSpan;
-    const newSpan = Math.min(MAX_LNG_SPAN, Math.max(MIN_LNG_SPAN, lngSpan / scaleFactor));
-    const newLngMin = focalLng - fx * newSpan;
-    const newLngMax = newLngMin + newSpan;
-    const latMid = (ab.latMax + ab.latMin) / 2;
-    const newB = boundsFromLngMid(newLngMin, newLngMax, latMid);
+    const focalLat = ab.latMax - fy * latSpan; // projY is inverted (fy=0 → latMax)
+
+    // New spans after zoom
+    const newLngSpan = Math.min(MAX_LNG_SPAN, Math.max(MIN_LNG_SPAN, lngSpan / scaleFactor));
+    const newLatSpan = newLngSpan * h / w;
+
+    // Keep focal point fixed at its screen position
+    const newLngMin = focalLng - fx * newLngSpan;
+    const newLngMax = newLngMin + newLngSpan;
+    const newLatMid = focalLat + (fy - 0.5) * newLatSpan;
+
+    const newB = boundsFromLngMid(newLngMin, newLngMax, newLatMid);
     curBounds.current = newB;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     renderFrame(newB);
@@ -392,7 +404,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
     }
     function onMouseUp() {
       isDraggingRef.current = false;
-      canvas.style.cursor = 'grab';
+      canvas.style.cursor = '';
     }
 
     function onTouchStart(e) {
@@ -424,7 +436,6 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
       lastTouchesRef.current = Array.from(e.touches);
     }
 
-    canvas.style.cursor = 'grab';
     canvas.addEventListener('wheel',      onWheel,      { passive: false });
     canvas.addEventListener('mousedown',  onMouseDown);
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -441,7 +452,6 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
       canvas.removeEventListener('touchend',   onTouchEnd);
       window.removeEventListener('mousemove',  onMouseMove);
       window.removeEventListener('mouseup',    onMouseUp);
-      canvas.style.cursor = '';
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -470,7 +480,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
           {allCoords.map((c, i) => (
             <div
               key={i}
-              className={`map-marker map-marker-static${c.event === selectedEvent ? ' map-marker-selected' : ''}`}
+              className={`map-marker map-marker-static${c.event === selectedEvent ? ' map-marker-selected' : ''}${c.event === hoveredEvent ? ' map-marker-hovered' : ''}`}
               style={{
                 left: `${projX(c.lng, curBounds.current) * 100}%`,
                 top:  `${projY(c.lat, curBounds.current) * 100}%`,

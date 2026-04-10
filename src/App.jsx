@@ -63,9 +63,13 @@ export default function App() {
               noZoom={true}
               onMarkerHover={photo => setHoveredPhoto(photo)}
               onMarkerLeave={() => setHoveredPhoto(null)}
-              onMarkerClick={photo => setSelectedPhoto(prev => prev === photo ? null : photo)}
+              onMarkerClick={photo => setSelectedPhoto(prev => {
+                if (prev === photo) { setHoveredPhoto(null); return null; }
+                return photo;
+              })}
               onBoundsChange={b => { boundsRef.current = b; }}
               selectedEvent={selectedPhoto}
+              hoveredEvent={hoveredPhoto}
             />
             {activePhoto && popupPos && (
               <div className="map-photo-popup" style={popupPos}>

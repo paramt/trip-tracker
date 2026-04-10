@@ -6,7 +6,7 @@ let geoPromise = null;
 function fetchGeo() {
   if (geoCache) return Promise.resolve(geoCache);
   if (geoPromise) return geoPromise;
-  geoPromise = fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json")
+  geoPromise = fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json")
     .then((r) => r.json())
     .then((t) => { geoCache = t; return t; });
   return geoPromise;
@@ -22,6 +22,18 @@ function fetchStates() {
     .then((r) => r.json())
     .then((t) => { statesCache = t; return t; });
   return statesPromise;
+}
+
+// ── Canadian province data (GeoJSON, WGS84) ───────────────────────────────────
+let provincesCache = null;
+let provincesPromise = null;
+function fetchProvinces() {
+  if (provincesCache) return Promise.resolve(provincesCache);
+  if (provincesPromise) return provincesPromise;
+  provincesPromise = fetch(`${import.meta.env.BASE_URL}canada-provinces.geojson`)
+    .then((r) => r.json())
+    .then((t) => { provincesCache = t; return t; });
+  return provincesPromise;
 }
 
 // ── Projection ────────────────────────────────────────────────────────────────
@@ -182,6 +194,48 @@ function drawStates(ctx, topo, w, h, isDark, bounds, opacity) {
   }
 }
 
+// ── Canadian province renderer (GeoJSON) ─────────────────────────────────────
+// Fills replace coarse world-atlas coast; borders fade in at same zoom as US states.
+function traceGeoRing(ctx, coords, w, h, bounds) {
+  if (!coords.length) return;
+  ctx.moveTo(projX(coords[0][0], bounds) * w, projY(coords[0][1], bounds) * h);
+  for (let i = 1; i < coords.length; i++) {
+    ctx.lineTo(projX(coords[i][0], bounds) * w, projY(coords[i][1], bounds) * h);
+  }
+  ctx.closePath();
+}
+
+function drawProvinces(ctx, geojson, w, h, isDark, bounds, opacity) {
+  if (!geojson) return;
+
+  ctx.fillStyle = isDark ? "#333333" : "#bebebe";
+  for (const feature of geojson.features) {
+    const { type, coordinates } = feature.geometry;
+    ctx.beginPath();
+    if (type === "Polygon") {
+      coordinates.forEach(ring => traceGeoRing(ctx, ring, w, h, bounds));
+    } else if (type === "MultiPolygon") {
+      coordinates.forEach(poly => poly.forEach(ring => traceGeoRing(ctx, ring, w, h, bounds)));
+    }
+    ctx.fill("evenodd");
+  }
+
+  if (opacity > 0) {
+    ctx.strokeStyle = isDark ? `rgba(26,26,26,${opacity})` : `rgba(239,239,239,${opacity})`;
+    ctx.lineWidth = 1.5;
+    for (const feature of geojson.features) {
+      const { type, coordinates } = feature.geometry;
+      ctx.beginPath();
+      if (type === "Polygon") {
+        coordinates.forEach(ring => traceGeoRing(ctx, ring, w, h, bounds));
+      } else if (type === "MultiPolygon") {
+        coordinates.forEach(poly => poly.forEach(ring => traceGeoRing(ctx, ring, w, h, bounds)));
+      }
+      ctx.stroke();
+    }
+  }
+}
+
 // ── Route polyline renderer ───────────────────────────────────────────────────
 function drawRoute(ctx, pts, w, h, b, alpha = 0.55) {
   if (!pts || pts.length < 2) return;
@@ -213,6 +267,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   const staticMarkersRef   = useRef(null);
   const topoRef            = useRef(null);
   const statesRef          = useRef(null);
+  const provincesRef       = useRef(null);
   const isDarkRef          = useRef(false);
   const curBounds          = useRef(WORLD);
   const animFrom           = useRef(WORLD);
@@ -250,6 +305,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
         const zoom = 360 / (ab.lngMax - ab.lngMin);
         const stateOpacity = Math.min(1, Math.max(0, (zoom - 5) / 5));
         drawStates(ctx, statesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
+        drawProvinces(ctx, provincesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
 
         const activePts = coordsPtsRef.current;
         // Background routes: same visibility rule as static markers
@@ -354,6 +410,7 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
 
     fetchGeo().then((topo) => { topoRef.current = topo; renderFrame(curBounds.current); });
     fetchStates().then((s) => { statesRef.current = s; renderFrame(curBounds.current); });
+    fetchProvinces().then((p) => { provincesRef.current = p; renderFrame(curBounds.current); });
 
     const ro = new ResizeObserver(() => renderFrame(curBounds.current));
     if (canvasRef.current) ro.observe(canvasRef.current);

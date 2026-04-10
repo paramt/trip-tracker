@@ -1,17 +1,17 @@
 # Route 66 — Project Notes
 
 ## What this is
-React + Vite app that visualizes a road trip on a map. Drop photos into `public/dump/`, run `npm run process`, and every photo is plotted on the map by its GPS coordinates and grouped by day.
+React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process`, and every GPS-tagged photo is plotted on the map.
 
 ## Workflow
-1. Drop photos (JPG, HEIC, PNG) into `public/dump/`
-2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates thumbnails, writes `src/data/photos.json`
+1. Drop photos (JPG, HEIC, PNG) into `public/photos/`
+2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, writes `src/data/photos.json`
 3. `npm run dev` — view the map
 
 ## Architecture
-- **Map/timeline UI**: Adapted from `../paramt.github.io` timeline section. `WorldMap.jsx`, `Polaroid.jsx`, `Tack.jsx` are copied verbatim. `App.jsx` replaces the hardcoded `timeline.js` data with dynamic grouping from `photos.json`.
-- **Data flow**: `photos.json` is a flat array of photo objects (file, thumb, lat, lng, datetime, width, height). `App.jsx` groups by calendar day at runtime — each day becomes one timeline event.
-- **Image serving**: Photos live in `public/dump/` and are served by Vite as static assets at `/dump/...`.
+- **Map UI**: `WorldMap.jsx`, `Polaroid.jsx`, `Tack.jsx` adapted from `../paramt.github.io`. `App.jsx` drives everything from `photos.json`.
+- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `App.jsx` filters to GPS-tagged photos, sorts chronologically, and plots one marker per photo.
+- **Image serving**: Photos live in `public/photos/` and are served by Vite as static assets at `/photos/...`. Thumbnails are WebP format (`.thumb.webp`).
 
 ## HEIC support — what didn't work, what did
 
@@ -44,7 +44,10 @@ const exif = await exifr.parse(buf.slice(tiffOff), { gps: true, exif: true });
 If EXIF datetime extraction still fails, fall back to `fs.stat().mtime`. iPhone sets the file modification time to the capture time, so this is usually accurate.
 
 ### Auto-generated JPGs must be excluded from processing
-When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up in `public/dump/`. On re-run, the script would pick up the generated `.jpg` as a new image to process (creating a duplicate entry). Fix: skip any `.jpg`/`.jpeg` file that has a same-name `.heic` sibling in the directory.
+When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up in `public/photos/`. On re-run, the script would pick up the generated `.jpg` as a new image to process (creating a duplicate entry). Fix: skip any `.jpg`/`.jpeg` file that has a same-name `.heic` sibling in the directory.
+
+### Metadata cache for CI
+`process.js` loads the existing `photos.json` as a cache keyed by filename. If a photo's metadata is already present (has GPS or a confirmed datetime), EXIF extraction is skipped — it reads from the cache instead. This lets CI re-run `process.js` even when the original HEIC files aren't committed, as long as `photos.json` is committed. Reverse geocode results are also cached this way to avoid redundant Nominatim API calls.
 
 ## WorldMap rendering
 
@@ -58,9 +61,13 @@ The map uses a simple equirectangular projection — `projX = (lng - lngMin) / l
 JSX inline styles (`style={{ left, top }}`) use `curBounds.current` (raw bounds) for initial render, but the canvas draws with `ab` (aspect-adjusted bounds). These give different `projY` values. Fix: a `useLayoutEffect` with no dependency array calls `renderFrame(curBounds.current)` after every React render, synchronously before paint, so the imperatively-set `ab`-correct styles always win before the user sees anything.
 
 ### Map resolution
-- World countries: `world-atlas@2/countries-10m.json` (1:10M, highest available)
-- US states: `us-atlas@3/states-10m.json` (1:10M)
-- State polygons are always filled with the land color, overlaying the world atlas. This gives crisp 10m US coastlines (Bay Area inlets, Florida Keys, etc.) at all zoom levels. State border lines fade in separately starting at zoom 5×.
+- World countries: `world-atlas@2/countries-10m.json` (1:10M, highest available) — fetched from jsDelivr CDN
+- US states: `us-atlas@3/states-10m.json` (1:10M) — fetched from jsDelivr CDN
+- Canadian provinces: `public/canada-provinces.geojson` — bundled locally (GeoJSON, WGS84, 13 provinces/territories sourced from codeforamerica/click_that_hood)
+- State/province polygons are always filled with the land color, overlaying the world atlas. This gives crisp US coastlines and Canadian province boundaries at all zoom levels. State/province border lines fade in separately starting at zoom 5×.
+
+### Canadian provinces use GeoJSON, not TopoJSON
+Unlike `us-atlas` (TopoJSON with quantized coordinates + `transform`), the Canada layer uses a plain GeoJSON FeatureCollection. It has its own renderer (`drawProvinces`) that directly projects `[lng, lat]` coordinate pairs via `projX`/`projY`, bypassing the `buildArcs`/`tracePath` TopoJSON pipeline.
 
 ### Route line
 The route is straight canvas line segments connecting consecutive GPS photo coordinates in chronological order (`gpsPhotos.map(p => ({ lat, lng }))`), drawn with `lineTo` in `drawRoute`. No curve fitting, road snapping, or great-circle interpolation — straight lines between photo locations approximate the actual road well enough when photos are taken frequently. The route is drawn at 0.25 opacity when no active coords are selected, 1.0 when active. `lineCap/lineJoin: round` keeps corners and endpoints smooth.

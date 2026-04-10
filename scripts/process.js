@@ -1,5 +1,5 @@
 /**
- * process.js — Extract EXIF metadata from photos in public/dump/ and generate
+ * process.js — Extract EXIF metadata from photos in public/photos/ and generate
  * src/data/photos.json. Also generates .thumb.webp thumbnails via sharp.
  *
  * Usage: npm run process

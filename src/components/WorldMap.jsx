@@ -138,27 +138,33 @@ function eachGeom(geom, fn) {
 }
 
 // ── Country map renderer ──────────────────────────────────────────────────────
-function drawCountries(ctx, topo, w, h, isDark, bounds) {
+// Split into fills and borders so borders can be drawn after state/province fills,
+// preventing the US-Canada border from being painted over.
+function drawCountryFills(ctx, topo, w, h, isDark, bounds) {
   const arcs = buildArcs(topo, (lng, lat) => [projX(lng, bounds) * w, projY(lat, bounds) * h]);
 
   ctx.fillStyle = isDark ? "#1a1a1a" : "#efefef";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = isDark ? "#333333" : "#bebebe";
 
-  const zoom = 360 / (bounds.lngMax - bounds.lngMin);
-  const borderOpacity = Math.min(1, Math.max(0, (zoom - 1.8) / 0.7));
-
   eachGeom(topo.objects.countries, (geom) => {
     const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
-    arcSets.forEach((rings) => {
-      tracePath(ctx, arcs, rings, w);
-      ctx.fill("evenodd");
-      if (borderOpacity > 0) {
-        ctx.strokeStyle = isDark ? `rgba(26,26,26,${borderOpacity})` : `rgba(239,239,239,${borderOpacity})`;
-        ctx.lineWidth = 0.75;
-        ctx.stroke();
-      }
-    });
+    arcSets.forEach((rings) => { tracePath(ctx, arcs, rings, w); ctx.fill("evenodd"); });
+  });
+
+  return arcs; // reused by drawCountryBorders
+}
+
+function drawCountryBorders(ctx, topo, arcs, w, h, isDark, bounds) {
+  const zoom = 360 / (bounds.lngMax - bounds.lngMin);
+  const borderOpacity = Math.min(1, Math.max(0, (zoom - 1.8) / 0.7));
+  if (borderOpacity <= 0) return;
+
+  ctx.strokeStyle = isDark ? `rgba(26,26,26,${borderOpacity})` : `rgba(239,239,239,${borderOpacity})`;
+  ctx.lineWidth = 0.75;
+  eachGeom(topo.objects.countries, (geom) => {
+    const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
+    arcSets.forEach((rings) => { tracePath(ctx, arcs, rings, w); ctx.stroke(); });
   });
 }
 
@@ -301,13 +307,17 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
         const ctx = canvas.getContext("2d");
         ctx.scale(dpr, dpr);
         const ab = adjustBoundsToAspect(b, w, h);
-        drawCountries(ctx, topo, w, h, isDarkRef.current, ab);
+        // Draw fills first, then all borders on top so country borders (e.g. US-Canada)
+        // aren't painted over by state/province fills.
+        const countryArcs = drawCountryFills(ctx, topo, w, h, isDarkRef.current, ab);
 
-        // State fills always; borders fade in from zoom 5× onward
         const zoom = 360 / (ab.lngMax - ab.lngMin);
         const stateOpacity = Math.min(1, Math.max(0, (zoom - 5) / 5));
         drawStates(ctx, statesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
         drawProvinces(ctx, provincesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
+
+        // Country borders on top of all fills
+        drawCountryBorders(ctx, topo, countryArcs, w, h, isDarkRef.current, ab);
 
         const activePts = coordsPtsRef.current;
         // Background routes: same visibility rule as static markers

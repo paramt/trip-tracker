@@ -36,6 +36,7 @@ export default function App() {
   const [hoveredPhoto, setHoveredPhoto] = useState(null);
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const boundsRef = useRef(null);
+  const zoomRef = useRef(5);
 
   useEffect(() => {
     gpsPhotos.forEach(p => {
@@ -57,15 +58,21 @@ export default function App() {
     let xShift = '-50%';
     if (xPct < 15) xShift = '0%';
     else if (xPct > 85) xShift = '-100%';
+    // Scale popup with zoom: smaller when zoomed out, capped at 1 when zoomed in
+    const popupScale = Math.max(0.5, Math.min(1, zoomRef.current / 6));
     // Flip popup above the pin when it would overflow the bottom of the screen.
     // Polaroid renders at 260px wide; compute its rendered height from the photo's aspect ratio.
     // Add 40px buffer: photos are rotated up to ±4° which increases their bounding box height
-    const popupHeightPct = (260 * (activePhoto.height / activePhoto.width) + 40) / window.innerHeight * 100;
-    const yShift = yPct + popupHeightPct > 100 ? 'calc(-100% - 24px)' : '18px';
+    const popupHeightPct = (260 * popupScale * (activePhoto.height / activePhoto.width) + 40) / window.innerHeight * 100;
+    const isAbove = yPct + popupHeightPct > 100;
+    const yShift = isAbove ? 'calc(-100% - 24px)' : '18px';
+    const xOrigin = xShift === '0%' ? 'left' : xShift === '-100%' ? 'right' : 'center';
+    const yOrigin = isAbove ? 'bottom' : 'top';
     return {
       left: `${xPct}%`,
       top: `${yPct}%`,
-      transform: `translateX(${xShift}) translateY(${yShift})`,
+      transform: `translateX(${xShift}) translateY(${yShift}) scale(${popupScale})`,
+      transformOrigin: `${xOrigin} ${yOrigin}`,
     };
   })() : null;
 
@@ -87,6 +94,7 @@ export default function App() {
               onMarkerLeave={() => setHoveredPhoto(null)}
               onMarkerClick={photo => setExpandedPhoto(prev => prev === photo ? null : photo)}
               onBoundsChange={b => { boundsRef.current = b; }}
+              onZoomChange={z => { zoomRef.current = z; }}
               selectedEvent={expandedPhoto}
               hoveredEvent={hoveredPhoto}
             />

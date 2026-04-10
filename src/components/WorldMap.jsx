@@ -97,7 +97,7 @@ function createMarkerEl(event, { onMarkerHover, onMarkerLeave, onMarkerClick }) 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorldMap({
   coords, allCoords = [], allRoutes = [], noZoom = false,
-  onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange,
+  onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange, onZoomChange,
   selectedEvent, hoveredEvent, children,
 }) {
   const coordsPts = coords ? (Array.isArray(coords) ? coords : [coords]) : null;
@@ -109,11 +109,13 @@ export default function WorldMap({
   const allRoutesRef       = useRef(allRoutes);
   const noZoomRef          = useRef(noZoom);
   const onBoundsChangeRef  = useRef(onBoundsChange);
+  const onZoomChangeRef    = useRef(onZoomChange);
   const callbacksRef       = useRef({ onMarkerHover, onMarkerLeave, onMarkerClick });
   coordsPtsRef.current     = coordsPts;
   allRoutesRef.current     = allRoutes;
   noZoomRef.current        = noZoom;
   onBoundsChangeRef.current = onBoundsChange;
+  onZoomChangeRef.current   = onZoomChange;
   callbacksRef.current     = { onMarkerHover, onMarkerLeave, onMarkerClick };
 
   // ── Initialize map ──────────────────────────────────────────────────────────
@@ -142,8 +144,10 @@ export default function WorldMap({
     map.on("move", () => emitBoundsChange(map, onBoundsChangeRef.current));
 
     const updateMarkerSize = () => {
-      const size = Math.max(10, Math.min(30, map.getZoom() * 2 + 6));
+      const zoom = map.getZoom();
+      const size = Math.max(10, Math.min(30, zoom * 2 + 6));
       containerRef.current?.style.setProperty("--marker-size", `${size}px`);
+      onZoomChangeRef.current?.(zoom);
     };
     map.on("zoom", updateMarkerSize);
     map.on("load", updateMarkerSize);

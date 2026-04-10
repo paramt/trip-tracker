@@ -36,7 +36,7 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
-async function fetchRoadRoute(waypoints, { retries = 2, timeoutMs = 300_000 } = {}) {
+async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = {}) {
   const coords = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
   const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
   let lastErr;

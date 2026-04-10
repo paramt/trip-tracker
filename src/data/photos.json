@@ -108,5 +108,15 @@
     "width": 3024,
     "height": 4032,
     "location": "Ottawa, ON"
+  },
+  {
+    "file": "/photos/IMG_5092.jpeg",
+    "thumb": "/photos/IMG_5092.thumb.webp",
+    "lat": 43.473597222222224,
+    "lng": -80.53737777777778,
+    "datetime": "2026-04-09T23:17:12.000",
+    "width": 5712,
+    "height": 4284,
+    "location": "Waterloo, ON"
   }
 ]

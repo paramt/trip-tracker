@@ -76,55 +76,96 @@ function lerpBounds(a, b, t) {
   };
 }
 
-// Equirectangular projection — linear lat/lng, no pole distortion.
-// cos(latMid) corrects for longitude convergence: 1° lng is shorter than 1° lat
-// at non-zero latitudes, so we show proportionally less latSpan to match real shapes.
+// ── Mercator projection ───────────────────────────────────────────────────────
+// Conformal — shapes look correct everywhere, no distortion as you pan north/south.
+function mercY(lat) {
+  const rad = lat * Math.PI / 180;
+  return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+}
+function invMercY(y) {
+  return (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180 / Math.PI;
+}
+
+// adjustBoundsToAspect: mercYspan = lngSpan_rad * h/w ensures equal x/y scale.
 function adjustBoundsToAspect(b, w, h) {
   const lngSpan = b.lngMax - b.lngMin;
-  const latMid  = (b.latMax + b.latMin) / 2;
-  const cosLat  = Math.cos(latMid * Math.PI / 180);
-  const latSpan = lngSpan * h / w * cosLat;
+  const yMid = mercY((b.latMax + b.latMin) / 2);
+  const halfYSpan = lngSpan * (Math.PI / 180) * (h / w) / 2;
   return {
     lngMin: b.lngMin,
     lngMax: b.lngMax,
-    latMin: latMid - latSpan / 2,
-    latMax: latMid + latSpan / 2,
+    latMin: invMercY(yMid - halfYSpan),
+    latMax: invMercY(yMid + halfYSpan),
   };
 }
 
 // ── Interaction helpers ───────────────────────────────────────────────────────
-// Bounds from lng range + a lat center (adjustBoundsToAspect only uses latMid)
 function boundsFromLngMid(lngMin, lngMax, latMid) {
   return { lngMin, lngMax, latMin: latMid - 1, latMax: latMid + 1 };
 }
-const MIN_LNG_SPAN = 0.5;   // max zoom (~city level)
-const MAX_LNG_SPAN = 360;   // min zoom (full world)
+const MIN_LNG_SPAN = 5;     // max zoom (~large state level)
+const MAX_LNG_SPAN = 300;   // min zoom (slightly inside full world)
+const MERC_LIMIT = mercY(85); // Mercator y at ±85° — clamp viewport edges here
+
+// Clamp so viewport edges stay within ±85° lat and [-180, 180] lng.
+function clampBounds(b, w, h) {
+  const lngSpan = b.lngMax - b.lngMin;
+  // Clamp longitude so viewport edges stay within [-180, 180]
+  const rawLngMid = (b.lngMin + b.lngMax) / 2;
+  const lngMid = Math.max(-180 + lngSpan / 2, Math.min(180 - lngSpan / 2, rawLngMid));
+  const newLngMin = lngMid - lngSpan / 2;
+  const newLngMax = lngMid + lngSpan / 2;
+  // Clamp latitude edges to ±85° in Mercator space
+  const yMid = mercY((b.latMax + b.latMin) / 2);
+  const halfYSpan = lngSpan * (Math.PI / 180) * (h / w) / 2;
+  const clampedYMid = Math.max(-MERC_LIMIT + halfYSpan, Math.min(MERC_LIMIT - halfYSpan, yMid));
+  const latMid = invMercY(clampedYMid);
+  return { lngMin: newLngMin, lngMax: newLngMax, latMin: latMid - 1, latMax: latMid + 1 };
+}
 
 export function projX(lng, b) { return (lng - b.lngMin) / (b.lngMax - b.lngMin); }
-export function projY(lat, b) { return 1 - (lat - b.latMin) / (b.latMax - b.latMin); }
+export function projY(lat, b) {
+  const yLat = mercY(lat), yMin = mercY(b.latMin), yMax = mercY(b.latMax);
+  return (yMax - yLat) / (yMax - yMin);
+}
 
 // ── Generic arc-path renderer ─────────────────────────────────────────────────
-function buildArcs(topo, toScreen) {
+// Decode TopoJSON arcs to geographic [lng, lat] pairs once (no projection yet).
+// Cached separately from pixel-space rendering so each frame only re-projects.
+function buildGeoArcs(topo) {
   const { scale, translate } = topo.transform;
   return topo.arcs.map((arc) => {
     let x = 0, y = 0;
-    return arc.map(([dx, dy]) => { x += dx; y += dy; return toScreen(x * scale[0] + translate[0], y * scale[1] + translate[1]); });
+    return arc.map(([dx, dy]) => {
+      x += dx; y += dy;
+      return [x * scale[0] + translate[0], y * scale[1] + translate[1]];
+    });
   });
 }
 
-function tracePath(ctx, decodedArcs, rings, w) {
+// Per-ring longitude normalization: each point is kept within 180° of the
+// previous point in the same ring. This eliminates antimeridian jumps
+// (Russia, Alaska) regardless of viewport position, without any special-casing.
+// Points that project outside the canvas are drawn off-screen and auto-clipped.
+function tracePath(ctx, geoArcs, rings, w, h, bounds) {
   ctx.beginPath();
   rings.forEach((ring) => {
-    let first = true, prevPx = null;
+    let first = true, lastLng = null;
     ring.forEach((idx) => {
       const rev = idx < 0;
-      const pts = decodedArcs[rev ? ~idx : idx];
+      const pts = geoArcs[rev ? ~idx : idx];
       const ordered = rev ? [...pts].reverse() : pts;
-      ordered.forEach(([px, py]) => {
+      ordered.forEach(([rawLng, lat]) => {
+        let lng = rawLng;
+        if (lastLng !== null) {
+          while (lng < lastLng - 180) lng += 360;
+          while (lng > lastLng + 180) lng -= 360;
+        }
+        lastLng = lng;
+        const px = projX(lng, bounds) * w;
+        const py = projY(lat, bounds) * h;
         if (first) { ctx.moveTo(px, py); first = false; }
-        else if (Math.abs(px - prevPx) > w * 0.5) { ctx.moveTo(px, py); }
         else { ctx.lineTo(px, py); }
-        prevPx = px;
       });
     });
     ctx.closePath();
@@ -140,22 +181,18 @@ function eachGeom(geom, fn) {
 // ── Country map renderer ──────────────────────────────────────────────────────
 // Split into fills and borders so borders can be drawn after state/province fills,
 // preventing the US-Canada border from being painted over.
-function drawCountryFills(ctx, topo, w, h, isDark, bounds) {
-  const arcs = buildArcs(topo, (lng, lat) => [projX(lng, bounds) * w, projY(lat, bounds) * h]);
-
+function drawCountryFills(ctx, topo, geoArcs, w, h, isDark, bounds) {
   ctx.fillStyle = isDark ? "#1a1a1a" : "#efefef";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = isDark ? "#333333" : "#bebebe";
 
   eachGeom(topo.objects.countries, (geom) => {
     const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
-    arcSets.forEach((rings) => { tracePath(ctx, arcs, rings, w); ctx.fill("evenodd"); });
+    arcSets.forEach((rings) => { tracePath(ctx, geoArcs, rings, w, h, bounds); ctx.fill("evenodd"); });
   });
-
-  return arcs; // reused by drawCountryBorders
 }
 
-function drawCountryBorders(ctx, topo, arcs, w, h, isDark, bounds) {
+function drawCountryBorders(ctx, topo, geoArcs, w, h, isDark, bounds) {
   const zoom = 360 / (bounds.lngMax - bounds.lngMin);
   const borderOpacity = Math.min(1, Math.max(0, (zoom - 1.8) / 0.7));
   if (borderOpacity <= 0) return;
@@ -164,24 +201,22 @@ function drawCountryBorders(ctx, topo, arcs, w, h, isDark, bounds) {
   ctx.lineWidth = 0.75;
   eachGeom(topo.objects.countries, (geom) => {
     const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
-    arcSets.forEach((rings) => { tracePath(ctx, arcs, rings, w); ctx.stroke(); });
+    arcSets.forEach((rings) => { tracePath(ctx, geoArcs, rings, w, h, bounds); ctx.stroke(); });
   });
 }
 
 // ── US state renderer ────────────────────────────────────────────────────────
 // Always fills state polygons with land color (high-res 10m coastline overlaid
 // on the coarser world atlas). State border lines fade in separately at zoom.
-function drawStates(ctx, topo, w, h, isDark, bounds, opacity) {
-  if (!topo) return;
-
-  const arcs = buildArcs(topo, (lng, lat) => [projX(lng, bounds) * w, projY(lat, bounds) * h]);
+function drawStates(ctx, topo, geoArcs, w, h, isDark, bounds, opacity) {
+  if (!topo || !geoArcs) return;
 
   // Fill: replace rough world-atlas US coast with crisp 10m state polygons
   ctx.fillStyle = isDark ? "#333333" : "#bebebe";
   eachGeom(topo.objects.states, (geom) => {
     const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
     arcSets.forEach((rings) => {
-      tracePath(ctx, arcs, rings, w);
+      tracePath(ctx, geoArcs, rings, w, h, bounds);
       ctx.fill("evenodd");
     });
   });
@@ -194,7 +229,7 @@ function drawStates(ctx, topo, w, h, isDark, bounds, opacity) {
       const arcSets = geom.type === "Polygon" ? [geom.arcs] : geom.type === "MultiPolygon" ? geom.arcs : [];
       arcSets.forEach((rings) => {
         rings.forEach((ring) => {
-          tracePath(ctx, arcs, [ring], w);
+          tracePath(ctx, geoArcs, [ring], w, h, bounds);
           ctx.stroke();
         });
       });
@@ -274,7 +309,9 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
   const activeMarkersRef   = useRef(null);
   const staticMarkersRef   = useRef(null);
   const topoRef            = useRef(null);
+  const geoArcsRef         = useRef(null);  // decoded geographic arcs for world-atlas
   const statesRef          = useRef(null);
+  const statesGeoArcsRef   = useRef(null);  // decoded geographic arcs for us-atlas
   const provincesRef       = useRef(null);
   const isDarkRef          = useRef(false);
   const curBounds          = useRef(WORLD);
@@ -309,15 +346,16 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
         const ab = adjustBoundsToAspect(b, w, h);
         // Draw fills first, then all borders on top so country borders (e.g. US-Canada)
         // aren't painted over by state/province fills.
-        const countryArcs = drawCountryFills(ctx, topo, w, h, isDarkRef.current, ab);
+        const geoArcs = geoArcsRef.current;
+        drawCountryFills(ctx, topo, geoArcs, w, h, isDarkRef.current, ab);
 
         const zoom = 360 / (ab.lngMax - ab.lngMin);
         const stateOpacity = Math.min(1, Math.max(0, (zoom - 5) / 5));
-        drawStates(ctx, statesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
+        drawStates(ctx, statesRef.current, statesGeoArcsRef.current, w, h, isDarkRef.current, ab, stateOpacity);
         drawProvinces(ctx, provincesRef.current, w, h, isDarkRef.current, ab, stateOpacity);
 
         // Country borders on top of all fills
-        drawCountryBorders(ctx, topo, countryArcs, w, h, isDarkRef.current, ab);
+        drawCountryBorders(ctx, topo, geoArcs, w, h, isDarkRef.current, ab);
 
         const activePts = coordsPtsRef.current;
         // Background routes: same visibility rule as static markers
@@ -375,32 +413,28 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
     const w = rect.width, h = rect.height;
     const ab = adjustBoundsToAspect(curBounds.current, w, h);
     const lngSpan = ab.lngMax - ab.lngMin;
-    const latSpan = ab.latMax - ab.latMin;
 
     // Normalized cursor position [0,1]
     const fx = (focalClientX - rect.left) / w;
     const fy = (focalClientY - rect.top)  / h;
 
-    // Geographic coords under cursor
+    // Geographic coords under cursor (Mercator-correct)
     const focalLng = ab.lngMin + fx * lngSpan;
-    const focalLat = ab.latMax - fy * latSpan; // projY is inverted (fy=0 → latMax)
+    const yMax = mercY(ab.latMax), yMin = mercY(ab.latMin), ySpan = yMax - yMin;
+    const focalMercY = yMax - fy * ySpan;
 
+    // New spans — Mercator: mercYspan = lngSpan_rad * h/w, so it scales with lngSpan
     const newLngSpan = Math.min(MAX_LNG_SPAN, Math.max(MIN_LNG_SPAN, lngSpan / scaleFactor));
+    const newYSpan = newLngSpan * (Math.PI / 180) * (h / w);
 
-    // adjustBoundsToAspect computes latSpan = K * cos(latMid), so newLatMid satisfies:
-    //   newLatMid = focalLat + (fy - 0.5) * K * cos(newLatMid)
-    // Solve with fixed-point iteration (converges in ~3 steps at US latitudes).
-    const K = newLngSpan * h / w;
-    let newLatMid = focalLat;
-    for (let i = 0; i < 3; i++) {
-      newLatMid = focalLat + (fy - 0.5) * K * Math.cos(newLatMid * Math.PI / 180);
-    }
+    // Keep focal point fixed: focalMercY stays at screen position fy
+    const newYMax = focalMercY + fy * newYSpan;
+    const newLatMid = invMercY(newYMax - newYSpan / 2);
 
-    // Keep focal point fixed at its screen position
     const newLngMin = focalLng - fx * newLngSpan;
     const newLngMax = newLngMin + newLngSpan;
 
-    const newB = boundsFromLngMid(newLngMin, newLngMax, newLatMid);
+    const newB = clampBounds(boundsFromLngMid(newLngMin, newLngMax, newLatMid), w, h);
     curBounds.current = newB;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     renderFrame(newB);
@@ -410,11 +444,11 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
     const { width: w, height: h } = canvas.getBoundingClientRect();
     const ab = adjustBoundsToAspect(curBounds.current, w, h);
     const lngSpan = ab.lngMax - ab.lngMin;
-    const latSpan = ab.latMax - ab.latMin;
+    const yMax = mercY(ab.latMax), yMin = mercY(ab.latMin), ySpan = yMax - yMin;
     const dLng = -(dx / w) * lngSpan;
-    const dLat =  (dy / h) * latSpan;  // drag down → pan north → latMid increases
-    const newB = boundsFromLngMid(ab.lngMin + dLng, ab.lngMax + dLng,
-                                  (ab.latMax + ab.latMin) / 2 + dLat);
+    const dY   =  (dy / h) * ySpan;  // drag down → pan north → yMid increases
+    const newLatMid = invMercY((yMax + yMin) / 2 + dY);
+    const newB = clampBounds(boundsFromLngMid(ab.lngMin + dLng, ab.lngMax + dLng, newLatMid), w, h);
     curBounds.current = newB;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     renderFrame(newB);
@@ -426,8 +460,8 @@ export default function WorldMap({ coords, allCoords = [], allRoutes = [], noZoo
     const onChange = (e) => { isDarkRef.current = false; renderFrame(curBounds.current); };
     mq.addEventListener("change", onChange);
 
-    fetchGeo().then((topo) => { topoRef.current = topo; renderFrame(curBounds.current); });
-    fetchStates().then((s) => { statesRef.current = s; renderFrame(curBounds.current); });
+    fetchGeo().then((topo) => { topoRef.current = topo; geoArcsRef.current = buildGeoArcs(topo); renderFrame(curBounds.current); });
+    fetchStates().then((s) => { statesRef.current = s; statesGeoArcsRef.current = buildGeoArcs(s); renderFrame(curBounds.current); });
     fetchProvinces().then((p) => { provincesRef.current = p; renderFrame(curBounds.current); });
 
     const ro = new ResizeObserver(() => renderFrame(curBounds.current));

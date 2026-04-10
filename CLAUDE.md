@@ -51,8 +51,12 @@ When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up
 
 ## WorldMap rendering
 
-### Projection: equirectangular with latitude correction
-The map uses equirectangular projection — `projX = (lng - lngMin) / lngSpan`, `projY = 1 - (lat - latMin) / latSpan`. `adjustBoundsToAspect(b, w, h)` derives `latSpan` from `lngSpan` so the canvas fills correctly: `latSpan = lngSpan * h / w * cos(latMid)`. The `cos(latMid)` factor corrects for longitude convergence — at 40°N, 1° of longitude is only ~77% as wide as 1° of latitude, so without it the US appears horizontally stretched. All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
+### Projection: Mercator
+The map uses Web Mercator — `projX = (lng - lngMin) / lngSpan`, `projY = (mercY(latMax) - mercY(lat)) / (mercY(latMax) - mercY(latMin))` where `mercY(lat) = ln(tan(π/4 + lat·π/360))`. Mercator is conformal: shapes look correct everywhere regardless of where you pan. `adjustBoundsToAspect(b, w, h)` derives `latMin`/`latMax` from `lngSpan` by keeping the Mercator y-span proportional to the canvas: `mercYspan = lngSpan * π/180 * h/w`, then inverting via `invMercY(y) = (2·atan(eʸ) - π/2) · 180/π`.
+
+Equirectangular was used earlier and caused visible distortion as you panned north/south — the viewport's latitude range changed with `cos(latMid)`, making shapes stretch dynamically. Mercator was tried before that but rejected because the original `sec(lat)` approximation in `adjustBoundsToAspect` blew up near the poles. The current implementation is correct: Mercator math is exact, and the ±85° lat clamp prevents any pole-adjacent weirdness.
+
+All drawing AND marker DOM positioning must use the adjusted bounds `ab`, not raw `curBounds`.
 
 ### Marker alignment — two sources of truth
 JSX inline styles (`style={{ left, top }}`) use `curBounds.current` (raw bounds) for initial render, but the canvas draws with `ab` (aspect-adjusted bounds). These give different `projY` values. Fix: a `useLayoutEffect` with no dependency array calls `renderFrame(curBounds.current)` after every React render, synchronously before paint, so the imperatively-set `ab`-correct styles always win before the user sees anything.
@@ -71,7 +75,8 @@ The route is straight canvas line segments connecting consecutive GPS photo coor
 
 ### Pan & zoom interaction
 All interaction updates `curBounds.current` directly and calls `renderFrame` immediately (cancelling any in-flight animation). Key math:
-- **Zoom**: fix focal longitude, scale `lngSpan`, keep `latMid` fixed
-- **Pan**: `dLng = -(dx/w) * lngSpan`, `dLat = (dy/h) * latSpan` (drag down = pan north)
+- **Zoom**: compute `focalMercY` under cursor, scale `lngSpan`, derive `newLatMid = invMercY(newYMax - newYSpan/2)` — no iteration needed because Mercator math is linear in y-space
+- **Pan**: `dLng = -(dx/w) * lngSpan`, `dY = (dy/h) * mercYspan`, `newLatMid = invMercY(yMid + dY)` (drag down = pan north)
+- `clampBounds` enforces `lngSpan ∈ [5°, 300°]` and viewport edges within ±85° lat (in Mercator space)
 - Mouse/wheel events on canvas; `mousemove`/`mouseup` on `window` to handle drag-out
 - `touch-action: none` on canvas prevents browser scroll/zoom from intercepting touch events

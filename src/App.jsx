@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import '@fontsource-variable/caveat';
 import WorldMap, { projX, projY } from './components/WorldMap';
 import Polaroid from './components/Polaroid';
@@ -36,6 +36,17 @@ export default function App() {
   const [hoveredPhoto, setHoveredPhoto] = useState(null);
   const [expandedPhoto, setExpandedPhoto] = useState(null);
   const boundsRef = useRef(null);
+
+  useEffect(() => {
+    gpsPhotos.forEach(p => {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = p.thumb;
+      link.fetchPriority = 'low';
+      document.head.appendChild(link);
+    });
+  }, []);
 
   const activePhoto = hoveredPhoto;
   const popupPos = activePhoto && boundsRef.current ? (() => {

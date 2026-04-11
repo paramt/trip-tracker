@@ -55,28 +55,212 @@ code {
 /* ── App Layout ── */
 .app {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
 }
 
-/* ── App Header ── */
-.app-header {
-  padding: 24px 24px 16px;
+/* ── Sidebar ── */
+.sidebar {
+  position: relative;
+  width: 44px; /* collapsed: just the toggle */
+  flex-shrink: 0;
+  background: #1a1a1a;
+  color: #f0ede8;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.sidebar-open {
+  width: 300px;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: #f0ede8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0.6;
+  transition: opacity 0.15s;
   flex-shrink: 0;
 }
 
-.app-title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+.sidebar-toggle:hover {
+  opacity: 1;
 }
 
-.app-subtitle {
+.sidebar-toggle-icon {
+  font-size: 11px;
+}
+
+.sidebar-body {
+  width: 300px; /* fixed so content doesn't reflow during animation */
+  padding: 16px 20px 32px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding-top: 70px; /* room for toggle */
+}
+
+/* Hide scrollbar but keep scrollability */
+.sidebar-body::-webkit-scrollbar { width: 0; }
+
+.sidebar-header {
+  margin-bottom: 24px;
+}
+
+.sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #eb4034;
+  border: 1.5px solid #eb4034;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-bottom: 10px;
+}
+
+.sidebar-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #eb4034;
+  animation: sidebar-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sidebar-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.sidebar-title {
+  font-family: 'Caveat Variable', 'Caveat', cursive;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #f0ede8;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-tagline {
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Sidebar Sections ── */
+.sidebar-section {
+  border-top: 1px solid #2e2e2e;
+  padding: 18px 0;
+}
+
+.sidebar-section-last {
+  padding-bottom: 0;
+}
+
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.sidebar-desc {
   font-size: 13px;
-  color: var(--fg-muted);
+  color: #bbb;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* ── Trip Legs ── */
+.trip-legs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trip-leg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.trip-leg-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.trip-leg-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0ede8;
+  line-height: 1.3;
+}
+
+.trip-leg-note {
+  font-size: 11.5px;
+  color: #888;
+  margin-top: 1px;
+  line-height: 1.4;
+}
+
+/* ── Anniversary callout ── */
+.sidebar-anniversary {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.anniversary-badge {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #eb4034;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.03em;
   margin-top: 2px;
 }
+
+.anniversary-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0ede8;
+  margin-bottom: 4px;
+}
+
+.anniversary-sub {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
 
 /* ── Empty State ── */
 .empty-state {
@@ -88,6 +272,7 @@ code {
 /* ── Full-page Map ── */
 .map-full {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   position: relative;
   overflow: hidden;
@@ -268,6 +453,109 @@ code {
 .polaroid-date {
   font-size: 8cqi;
   color: #888;
+}
+
+/* ── Day Timeline (sidebar) ── */
+.day-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.day-timeline-row {
+  cursor: pointer;
+}
+
+.day-timeline-event {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 0 10px;
+  align-items: stretch;
+}
+
+.day-timeline-day {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #555;
+  text-align: right;
+  padding-top: 10px;
+  flex-shrink: 0;
+  position: relative;
+  isolation: isolate;
+  white-space: nowrap;
+}
+
+/* Red arrow tab on selected */
+.day-timeline-day::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: -8px;
+  right: -10px;
+  background: #eb4034;
+  clip-path: polygon(8px 0%, 100% 0%, 100% 100%, 8px 100%, 0% 50%);
+  z-index: -1;
+  transform: scaleX(0);
+  transform-origin: right center;
+  transition: transform 0.2s ease;
+}
+
+.day-timeline-event--active .day-timeline-day {
+  color: #fff;
+  padding-right: 4px;
+}
+
+.day-timeline-event--active .day-timeline-day::before {
+  transform: scaleX(1);
+}
+
+.day-timeline-line-content {
+  border-left: 1px solid #2e2e2e;
+  position: relative;
+  padding: 8px 0 8px 16px;
+}
+
+.day-timeline-dot {
+  position: absolute;
+  left: -4px;
+  top: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #333;
+  border: 1.5px solid #1a1a1a;
+  outline: 1px solid #333;
+  transition: background 0.15s, outline-color 0.15s;
+}
+
+.day-timeline-event--active .day-timeline-dot {
+  background: #eb4034;
+  outline-color: #eb4034;
+}
+
+.day-timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.day-timeline-title {
+  font-size: 13px;
+  color: #f0ede8;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.day-timeline-desc {
+  font-size: 11.5px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.day-timeline-count {
+  font-size: 10.5px;
+  color: #555;
+  font-family: var(--mono);
 }
 
 /* ── Expanded polaroid overlay ── */

@@ -78,6 +78,15 @@ function addRouteLayer(map, allRoutes) {
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": "#eb4034", "line-width": 3, "line-opacity": 0.55 },
   });
+  map.addSource("route-highlight", {
+    type: "geojson",
+    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } },
+  });
+  map.addLayer({
+    id: "route-highlight", type: "line", source: "route-highlight",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-color": "#ffcc00", "line-width": 5, "line-opacity": 0.9 },
+  });
 }
 
 // ── Marker DOM element factory ────────────────────────────────────────────────
@@ -96,27 +105,29 @@ function createMarkerEl(event, { onMarkerHover, onMarkerLeave, onMarkerClick }) 
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorldMap({
-  coords, allCoords = [], allRoutes = [], noZoom = false,
+  coords, allCoords = [], allRoutes = [], highlightRoute = null, noZoom = false,
   onMarkerHover, onMarkerLeave, onMarkerClick, onBoundsChange, onZoomChange,
   selectedEvent, hoveredEvent, children,
 }) {
   const coordsPts = coords ? (Array.isArray(coords) ? coords : [coords]) : null;
 
-  const containerRef       = useRef(null);
-  const mapRef             = useRef(null);
-  const markersRef         = useRef(new Map()); // event → { marker, el }
-  const coordsPtsRef       = useRef(coordsPts);
-  const allRoutesRef       = useRef(allRoutes);
-  const noZoomRef          = useRef(noZoom);
-  const onBoundsChangeRef  = useRef(onBoundsChange);
-  const onZoomChangeRef    = useRef(onZoomChange);
-  const callbacksRef       = useRef({ onMarkerHover, onMarkerLeave, onMarkerClick });
-  coordsPtsRef.current     = coordsPts;
-  allRoutesRef.current     = allRoutes;
-  noZoomRef.current        = noZoom;
+  const containerRef        = useRef(null);
+  const mapRef              = useRef(null);
+  const markersRef          = useRef(new Map()); // event → { marker, el }
+  const coordsPtsRef        = useRef(coordsPts);
+  const allRoutesRef        = useRef(allRoutes);
+  const highlightRouteRef   = useRef(highlightRoute);
+  const noZoomRef           = useRef(noZoom);
+  const onBoundsChangeRef   = useRef(onBoundsChange);
+  const onZoomChangeRef     = useRef(onZoomChange);
+  const callbacksRef        = useRef({ onMarkerHover, onMarkerLeave, onMarkerClick });
+  coordsPtsRef.current      = coordsPts;
+  allRoutesRef.current      = allRoutes;
+  highlightRouteRef.current = highlightRoute;
+  noZoomRef.current         = noZoom;
   onBoundsChangeRef.current = onBoundsChange;
   onZoomChangeRef.current   = onZoomChange;
-  callbacksRef.current     = { onMarkerHover, onMarkerLeave, onMarkerClick };
+  callbacksRef.current      = { onMarkerHover, onMarkerLeave, onMarkerClick };
 
   // ── Initialize map ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -180,6 +191,26 @@ export default function WorldMap({
     if (!map || !map.isStyleLoaded()) return;
     map.getSource("route")?.setData(routeToGeoJSON(allRoutes));
   }, [allRoutes]);
+
+  // ── Update highlight segment ──────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const coords = highlightRoute ? highlightRoute.map(p => [p.lng, p.lat]) : [];
+    const apply = () => {
+      map.getSource("route-highlight")?.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+      });
+    };
+    // If the style isn't loaded yet (source doesn't exist), wait for load.
+    // In practice the user clicks long after load, so the first branch always runs.
+    if (map.getSource("route-highlight")) {
+      apply();
+    } else {
+      map.once("load", apply);
+    }
+  }, [highlightRoute]);
 
   // ── Sync markers when allCoords changes ──────────────────────────────────
   useEffect(() => {

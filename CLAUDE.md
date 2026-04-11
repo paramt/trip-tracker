@@ -98,6 +98,9 @@ The route follows actual roads via **OpenRouteService (ORS)**. Routing happens a
 ### Fallback
 If ORS fails after all retries (including a missing API key), `process.js` writes `coordinates: []` to `route.json` and continues without crashing. `App.jsx` detects the empty array and falls back to straight lines between photo coordinates (the original behavior).
 
+### ORS 6,000 km per-request limit
+ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`error 2004`). The limit applies per batch (40 waypoints), not to the total trip, so trips longer than 6,000 km are fine as long as no 40 consecutive waypoints span more than that. In practice this is never an issue at normal photo density. It does bite with test data that mixes geographically distant trips — e.g. California photos from 2025 mixed with Ontario/New York photos from 2026 — which creates a chronologically-sorted route that zig-zags cross-continent within a single batch.
+
 ## HEIC support — what didn't work, what did
 
 ### Problem: `sharp` can't decode HEIC

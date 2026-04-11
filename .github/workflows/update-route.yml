@@ -22,6 +22,8 @@ jobs:
       - run: npm ci
 
       - run: npm run update-route
+        env:
+          ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
 
       - name: Commit route if changed
         run: |

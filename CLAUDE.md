@@ -75,26 +75,28 @@ Using `d(i+1).firstPhotoIdx` (not `d(i+1).firstPhotoIdx - 1`) as the endpoint en
 
 ## Road-snapped routing
 
-The route follows actual roads via **OSRM** (Open Source Routing Machine). Routing happens at process time in `process.js`, not in the browser.
+The route follows actual roads via **OpenRouteService (ORS)**. Routing happens at process time in `process.js`, not in the browser. Requires `ORS_API_KEY` env var (or GitHub Actions secret).
 
 ### How it works
 1. After sorting all GPS photos chronologically, `process.js` calls `fetchRoadRouteBatched(gpsWaypoints)`
-2. OSRM endpoint: `https://router.project-osrm.org/route/v1/driving/{lng,lat;...}?overview=full&geometries=geojson`
+2. ORS endpoint: POST `https://api.openrouteservice.org/v2/directions/driving-car/geojson`
+   - Headers: `Authorization: <ORS_API_KEY>`, `Content-Type: application/json`
+   - Body: `{ "coordinates": [[lng, lat], ...] }`
 3. Returns `[[lng, lat], ...]` coordinates — a full-resolution road-following polyline
 4. Written to `src/data/route.json` as `{ waypointHash, coordinates }`
 5. `App.jsx` imports `route.json` and converts `[lng, lat]` pairs to `{ lat, lng }` objects for `WorldMap`
 
 ### Caching
-`process.js` computes `waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]))` and compares it to the stored hash. If unchanged and `coordinates` is non-empty, the OSRM fetch is skipped.
+`process.js` computes `waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]))` and compares it to the stored hash. If unchanged and `coordinates` is non-empty, the ORS fetch is skipped.
 
 ### Batching
-`fetchRoadRouteBatched` splits requests into chunks of 100 waypoints with 1-waypoint overlap between chunks (to avoid gaps at joins). Each batch waits 1s before the next to be polite to the demo server.
+`fetchRoadRouteBatched` splits requests into chunks of 40 waypoints (ORS free tier limit is ~50; 40 used as a safety margin) with 1-waypoint overlap between chunks (to avoid gaps at joins). Each batch waits 1s between requests.
 
 ### Retries + timeout
-`fetchRoadRoute` retries up to 2 times with 3s/6s backoff. Timeout is 300s (5 minutes) per request — long routes like Ottawa → San Francisco take significant time to compute. The OSRM demo server sometimes returns 504 on the first attempt; retries handle this reliably.
+`fetchRoadRoute` retries up to 3 times with 3s/6s/9s backoff. Timeout is 300s (5 minutes) per request. ORS returns structured error objects `{ error: { code, message } }` which are thrown directly.
 
 ### Fallback
-If OSRM fails after all retries, `process.js` writes `coordinates: []` to `route.json` and continues without crashing. `App.jsx` detects the empty array and falls back to straight lines between photo coordinates (the original behavior).
+If ORS fails after all retries (including a missing API key), `process.js` writes `coordinates: []` to `route.json` and continues without crashing. `App.jsx` detects the empty array and falls back to straight lines between photo coordinates (the original behavior).
 
 ## HEIC support — what didn't work, what did
 

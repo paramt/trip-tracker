@@ -30,6 +30,8 @@ jobs:
       - run: npm run process
 
       - run: npm run update-route || true
+        env:
+          ORS_API_KEY: ${{ secrets.ORS_API_KEY }}
 
       - name: Commit generated files back to repo
         run: |

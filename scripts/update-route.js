@@ -1,9 +1,9 @@
 /**
- * update-route.js — Fetch a road-snapped route from OSRM and write src/data/route.json.
+ * update-route.js — Fetch a road-snapped route from OpenRouteService and write src/data/route.json.
  *
  * Reads GPS waypoints from the already-computed src/data/photos.json.
- * Skips the OSRM fetch if route.json already has a matching, non-empty route.
- * Exits 1 on OSRM failure so route.json is left untouched (last known good route preserved).
+ * Skips the ORS fetch if route.json already has a matching, non-empty route.
+ * Exits 1 on ORS failure so route.json is left untouched (last known good route preserved).
  *
  * Usage: npm run update-route
  */
@@ -45,7 +45,7 @@ async function main() {
   const reason = existing?.coordinates?.length === 0
     ? 'existing route has empty coordinates'
     : 'waypoints have changed';
-  console.log(`Route stale (${reason}), fetching from OSRM...`);
+  console.log(`Route stale (${reason}), fetching from ORS...`);
   console.log(`  ${gpsWaypoints.length} GPS waypoints`);
 
   // fetchRoadRouteBatched throws after built-in retries — we let it propagate so the
@@ -54,7 +54,7 @@ async function main() {
   try {
     coordinates = await fetchRoadRouteBatched(gpsWaypoints);
   } catch (err) {
-    console.error(`\nOSRM fetch failed after all retries — route.json not updated.`);
+    console.error(`\nORS fetch failed after all retries — route.json not updated.`);
     console.error(`Last error: ${err.message}`);
     process.exit(1);
   }

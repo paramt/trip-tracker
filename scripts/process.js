@@ -37,8 +37,15 @@ async function reverseGeocode(lat, lng) {
 }
 
 export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = {}) {
-  const coords = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  const apiKey = process.env.ORS_API_KEY;
+  if (!apiKey) throw new Error('ORS_API_KEY environment variable is not set');
+
+  const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+  const body = JSON.stringify({
+    coordinates: waypoints.map(p => [p.lng, p.lat]),
+    radiuses: waypoints.map(() => -1), // -1 = unlimited snapping radius
+  });
+
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
@@ -46,12 +53,18 @@ export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_0
       await new Promise(r => setTimeout(r, 3000 * attempt));
     }
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'route-66-photo-map/1.0' }, signal: AbortSignal.timeout(timeoutMs) });
-      if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) throw new Error(`ORS HTTP ${res.status}`);
       const data = await res.json();
-      if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates)
-        throw new Error(`OSRM error: ${data.code}`);
-      return data.routes[0].geometry.coordinates; // [[lng, lat], ...]
+      if (data.error) throw new Error(`ORS error ${data.error.code}: ${data.error.message}`);
+      if (!data.features?.[0]?.geometry?.coordinates)
+        throw new Error('ORS response missing geometry');
+      return data.features[0].geometry.coordinates; // [[lng, lat], ...]
     } catch (err) {
       lastErr = err;
       process.stderr.write(`\n  attempt ${attempt + 1}/${retries + 1} failed: ${err.message}`);
@@ -61,7 +74,7 @@ export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_0
 }
 
 export async function fetchRoadRouteBatched(waypoints) {
-  const BATCH = 100;
+  const BATCH = 40; // ORS free tier: 50 waypoints max; 40 for safety
   if (waypoints.length <= BATCH) return fetchRoadRoute(waypoints);
   const segments = [];
   for (let i = 0; i < waypoints.length - 1; i += BATCH - 1) {

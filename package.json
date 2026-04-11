@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "process": "node scripts/process.js",
-    "update-route": "node scripts/update-route.js"
+    "process": "node --env-file=.env scripts/process.js",
+    "update-route": "node --env-file=.env scripts/update-route.js"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "^5.2.8",

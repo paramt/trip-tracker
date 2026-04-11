@@ -59,9 +59,11 @@ export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_0
         body,
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!res.ok) throw new Error(`ORS HTTP ${res.status}`);
       const data = await res.json();
-      if (data.error) throw new Error(`ORS error ${data.error.code}: ${data.error.message}`);
+      if (!res.ok || data.error) {
+        const msg = data.error ? `${data.error.code}: ${data.error.message}` : res.status;
+        throw new Error(`ORS error ${msg}`);
+      }
       if (!data.features?.[0]?.geometry?.coordinates)
         throw new Error('ORS response missing geometry');
       return data.features[0].geometry.coordinates; // [[lng, lat], ...]

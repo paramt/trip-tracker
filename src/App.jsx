@@ -66,12 +66,12 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
         <span className="sidebar-toggle-icon">{open ? '◀' : '▶'}</span>
       </button>
 
-      <div className="sidebar-body">
-        <header className="sidebar-header">
-          <div className="sidebar-badge">LIVE</div>
-          <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
-        </header>
+      <div className="sidebar-titlebar">
+        <div className="sidebar-badge">LIVE</div>
+        <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
+      </div>
 
+      <div className="sidebar-body">
         <section className="sidebar-section">
           <p className="sidebar-desc">
             See live updates from my Route 66 road trip as photos from my phone are synced and the timeline is auto generated using metadata. 
@@ -220,7 +220,7 @@ export default function App() {
     const popupScale = Math.max(0.6, Math.min(1, zoomRef.current / 6));
     const popupHeightPct = (260 * popupScale * (activePhoto.height / activePhoto.width) + 40) / window.innerHeight * 100;
     const isAbove = yPct + popupHeightPct > 100;
-    const yShift = isAbove ? 'calc(-100% - 24px)' : '18px';
+    const yShift = isAbove ? 'calc(-100% - 52px)' : '18px';
     const xOrigin = xShift === '0%' ? 'left' : xShift === '-100%' ? 'right' : 'center';
     const yOrigin = isAbove ? 'bottom' : 'top';
     return {

@@ -76,7 +76,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
         <section className="sidebar-section">
           <h2 className="sidebar-section-title">The Plan</h2>
           <p className="sidebar-desc">
-            See live updates from my Route 66 road trip as photos from my phone are automatically synced. 
+            See live updates from my Route 66 road trip as photos from my phone are synced and the timeline is auto generated using metadata. 
             The plan is: 
           </p>
           <ul className="trip-legs">
@@ -94,7 +94,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
 
         {dayGroups.length > 0 && (
           <section className="sidebar-section">
-            <h2 className="sidebar-section-title">Day by Day</h2>
+            <h2 className="sidebar-section-title">Generated Timeline</h2>
             <DayTimeline
               dayGroups={dayGroups}
               selectedDay={selectedDay}

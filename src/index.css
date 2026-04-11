@@ -201,7 +201,7 @@ code {
 
 .trip-leg {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
 }
 
@@ -459,6 +459,7 @@ code {
 .day-timeline {
   display: flex;
   flex-direction: column;
+  padding-left: 10px;
 }
 
 .day-timeline-row {
@@ -467,7 +468,7 @@ code {
 
 .day-timeline-event {
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 52px 1fr;
   gap: 0 10px;
   align-items: stretch;
 }
@@ -476,12 +477,15 @@ code {
   font-family: var(--mono);
   font-size: 10px;
   color: #555;
-  text-align: right;
-  padding-top: 10px;
+  text-align: center;
   flex-shrink: 0;
   position: relative;
   isolation: isolate;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
 }
 
 /* Red arrow tab on selected */
@@ -502,7 +506,6 @@ code {
 
 .day-timeline-event--active .day-timeline-day {
   color: #fff;
-  padding-right: 4px;
 }
 
 .day-timeline-event--active .day-timeline-day::before {
@@ -518,7 +521,8 @@ code {
 .day-timeline-dot {
   position: absolute;
   left: -4px;
-  top: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 7px;
   height: 7px;
   border-radius: 50%;

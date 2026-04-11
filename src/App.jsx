@@ -6,9 +6,9 @@ import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
 
 const TRIP_LEGS = [
-  { icon: '🚗', label: 'Toronto → Chicago', note: 'Kicking things off across the border' },
-  { icon: '🛣️', label: 'Chicago → LA', note: 'Route 66 — all 2,400 miles of history' },
-  { icon: '🌊', label: 'LA → San Francisco', note: 'Pacific Coast Highway finale' },
+  { icon: '🚗', label: 'Waterloo → Chicago' },
+  { icon: '🛣️', label: 'Chicago → LA', note: 'via Historic Route 66' },
+  { icon: '🌊', label: 'LA → San Francisco', note: 'via the Pacific Coast Highway' },
 ];
 
 // ── Day Timeline ──────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
     <div className={`day-timeline${selectedDay != null ? ' day-timeline--has-selection' : ''}`}>
       {dayGroups.map((group, i) => {
         const isActive = selectedDay === i;
-        const firstPhoto = group.photos[0];
+        const lastPhoto = group.photos[group.photos.length - 1];
         return (
           <div
             key={group.date}
@@ -39,8 +39,8 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
                 <div className="day-timeline-dot" />
                 <div className="day-timeline-body">
                   <div className="day-timeline-title">{formatDayLabel(group.date)}</div>
-                  {firstPhoto?.location && (
-                    <div className="day-timeline-desc">{firstPhoto.location}</div>
+                  {lastPhoto?.location && (
+                    <div className="day-timeline-desc">{lastPhoto.location}</div>
                   )}
                   <div className="day-timeline-count">{group.photos.length} photo{group.photos.length !== 1 ? 's' : ''}</div>
                 </div>
@@ -70,14 +70,14 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
         <header className="sidebar-header">
           <div className="sidebar-badge">LIVE</div>
           <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
-          <p className="sidebar-tagline">Summer 2025</p>
+          <p className="sidebar-tagline">Summer 2026</p>
         </header>
 
         <section className="sidebar-section">
           <h2 className="sidebar-section-title">The Plan</h2>
           <p className="sidebar-desc">
-            A bucket-list drive across North America — Toronto to San Francisco through the
-            heart of the continent and up the Pacific coast.
+            See live updates from my Route 66 road trip as photos from my phone are automatically synced. 
+            The plan is: 
           </p>
           <ul className="trip-legs">
             {TRIP_LEGS.map(leg => (
@@ -92,19 +92,8 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
           </ul>
         </section>
 
-        <section className="sidebar-section sidebar-anniversary">
-          <div className="anniversary-badge">100</div>
-          <div>
-            <div className="anniversary-title">Route 66 Centennial</div>
-            <div className="anniversary-sub">
-              The Mother Road turns 100 in 2026. We're celebrating a year early — driving
-              every mile from Chicago to Santa Monica before the crowds hit.
-            </div>
-          </div>
-        </section>
-
         {dayGroups.length > 0 && (
-          <section className="sidebar-section sidebar-section-last">
+          <section className="sidebar-section">
             <h2 className="sidebar-section-title">Day by Day</h2>
             <DayTimeline
               dayGroups={dayGroups}
@@ -113,6 +102,16 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
             />
           </section>
         )}
+
+        <section className="sidebar-section sidebar-section-last sidebar-anniversary">
+          <div className="anniversary-badge">100</div>
+          <div>
+            <div className="anniversary-title">Route 66 Centennial</div>
+            <div className="anniversary-sub">
+              Route 66 was originally established in 1926, so we'll get to celebrate its anniversary :)
+            </div>
+          </div>
+        </section>
       </div>
     </aside>
   );
@@ -171,15 +170,22 @@ const photoRouteIndices = routePts.length
     })
   : [];
 
+function lastPhotoIdx(dayIdx) {
+  const g = dayGroups[dayIdx];
+  return g.firstPhotoIdx + g.photos.length - 1;
+}
+
 function highlightForDay(dayIdx) {
   if (!routePts.length || dayIdx == null) return null;
-  const startPhotoIdx = dayGroups[dayIdx].firstPhotoIdx;
-  const r0 = photoRouteIndices[startPhotoIdx];
-  const r1 = dayIdx < dayGroups.length - 1
-    ? photoRouteIndices[dayGroups[dayIdx + 1].firstPhotoIdx]
-    : routePts.length - 1;
+  // Start: last photo of previous day, or first photo of current day if day 0
+  const startIdx = dayIdx > 0 ? lastPhotoIdx(dayIdx - 1) : dayGroups[dayIdx].firstPhotoIdx;
+  const endIdx = lastPhotoIdx(dayIdx);
+  if (startIdx === endIdx) return null; // single photo on day 0 → no segment
+  const r0 = photoRouteIndices[startIdx];
+  const r1 = photoRouteIndices[endIdx];
   const lo = Math.min(r0, r1);
   const hi = Math.max(r0, r1);
+  if (lo === hi) return null;
   return routePts.slice(lo, hi + 1);
 }
 

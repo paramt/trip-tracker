@@ -51,6 +51,28 @@ Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the phot
 - **Width override**: `.polaroid-expanded .polaroid { width: min(480px, 85vw) }` overrides the fixed `260px` set on `.polaroid`. Put this after the base `.polaroid` rule so specificity works.
 - **Spring animation**: `cubic-bezier(0.34, 1.4, 0.64, 1)` gives the polaroid a slight overshoot for a snappy feel. The `@keyframes polaroidExpand` scales from `0.25` to `1` — keep `transform: scale(1)` in the `to` frame, not `transform: none`, or it may conflict with the rotation applied via `--polaroid-rotate`.
 
+## Sidebar
+
+A collapsible dark sidebar (`#1a1a1a`) sits left of the map. State lives in `App` (`sidebarOpen`, `selectedDay`) and is passed as props to `<Sidebar>`. Width transitions via CSS (`width: 44px` collapsed → `width: 300px` open); the inner `.sidebar-body` is fixed at 300px so content never reflows during animation.
+
+### Day-by-day timeline
+
+`dayGroups` is computed at module level by grouping `gpsPhotos` (already sorted chronologically) by `datetime.slice(0, 10)`. Each group stores `firstPhotoIdx` — the index of its first photo in `gpsPhotos`.
+
+Clicking a day calls `setSelectedDay(i)`, which recomputes `highlightRoute` via `useMemo(() => highlightForDay(selectedDay), [selectedDay])`.
+
+### Route segment highlighting
+
+`photoRouteIndices` maps each GPS photo to its nearest point index in `routePts` (= `globalRoute[0]`), computed once at module level with a simple O(n·m) nearest-neighbour scan.
+
+`highlightForDay(i)` slices `routePts` between:
+- `r0 = photoRouteIndices[dayGroups[i].firstPhotoIdx]`
+- `r1 = photoRouteIndices[dayGroups[i+1].firstPhotoIdx]` for intermediate days, or `routePts.length - 1` for the last day
+
+Using `d(i+1).firstPhotoIdx` (not `d(i+1).firstPhotoIdx - 1`) as the endpoint ensures single-photo days still produce a visible segment.
+
+`WorldMap` accepts a `highlightRoute` prop and maintains a `route-highlight` GeoJSON source + line layer (yellow, 5px, opacity 0.9) added in `addRouteLayer` alongside the base `route` layer. The highlight effect uses a direct `map.getSource("route-highlight")` existence check rather than `map.isStyleLoaded()` — the latter can spuriously return `false` while tiles are loading, silently dropping the update.
+
 ## Road-snapped routing
 
 The route follows actual roads via **OSRM** (Open Source Routing Machine). Routing happens at process time in `process.js`, not in the browser.

@@ -158,5 +158,15 @@
     "width": 2316,
     "height": 3088,
     "location": null
+  },
+  {
+    "file": "/photos/IMG_5101.jpeg",
+    "thumb": "/photos/IMG_5101.thumb.webp",
+    "lat": 43.58026111111111,
+    "lng": -79.62553333333332,
+    "datetime": "2026-04-10T22:24:16.000",
+    "width": 2316,
+    "height": 3088,
+    "location": "Mississauga, ON"
   }
 ]

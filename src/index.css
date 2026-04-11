@@ -111,6 +111,13 @@ code {
   overflow-x: hidden;
   flex: 1;
   padding-top: 70px; /* room for toggle */
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+.sidebar:not(.sidebar-open) .sidebar-body {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Hide scrollbar but keep scrollability */

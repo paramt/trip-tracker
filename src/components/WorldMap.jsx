@@ -198,10 +198,29 @@ export default function WorldMap({
     if (!map) return;
     const coords = highlightRoute ? highlightRoute.map(p => [p.lng, p.lat]) : [];
     const apply = () => {
+      // For a single-point highlight, don't draw a line (invalid GeoJSON LineString)
+      const lineCoords = highlightRoute && highlightRoute.length > 1 ? coords : [];
       map.getSource("route-highlight")?.setData({
         type: "Feature",
-        geometry: { type: "LineString", coordinates: coords },
+        geometry: { type: "LineString", coordinates: lineCoords },
       });
+
+      if (highlightRoute && highlightRoute.length > 1) {
+        const lats = highlightRoute.map(p => p.lat);
+        const lngs = highlightRoute.map(p => p.lng);
+        map.fitBounds(
+          [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+          { animate: true, duration: 600, easing: easeInOut, padding: 80 }
+        );
+      } else if (highlightRoute && highlightRoute.length === 1) {
+        map.easeTo({ center: [highlightRoute[0].lng, highlightRoute[0].lat], zoom: 8, duration: 600 });
+      } else if (!highlightRoute) {
+        const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
+        map.fitBounds(
+          [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
+          { animate: true, duration: 600, easing: easeInOut }
+        );
+      }
     };
     // If the style isn't loaded yet (source doesn't exist), wait for load.
     // In practice the user clicks long after load, so the first branch always runs.
@@ -210,7 +229,7 @@ export default function WorldMap({
     } else {
       map.once("load", apply);
     }
-  }, [highlightRoute]);
+  }, [highlightRoute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync markers when allCoords changes ──────────────────────────────────
   useEffect(() => {

@@ -70,11 +70,9 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
         <header className="sidebar-header">
           <div className="sidebar-badge">LIVE</div>
           <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
-          <p className="sidebar-tagline">Summer 2026</p>
         </header>
 
         <section className="sidebar-section">
-          <h2 className="sidebar-section-title">The Plan</h2>
           <p className="sidebar-desc">
             See live updates from my Route 66 road trip as photos from my phone are synced and the timeline is auto generated using metadata. 
             The plan is: 
@@ -180,12 +178,12 @@ function highlightForDay(dayIdx) {
   // Start: last photo of previous day, or first photo of current day if day 0
   const startIdx = dayIdx > 0 ? lastPhotoIdx(dayIdx - 1) : dayGroups[dayIdx].firstPhotoIdx;
   const endIdx = lastPhotoIdx(dayIdx);
-  if (startIdx === endIdx) return null; // single photo on day 0 → no segment
   const r0 = photoRouteIndices[startIdx];
   const r1 = photoRouteIndices[endIdx];
   const lo = Math.min(r0, r1);
   const hi = Math.max(r0, r1);
-  if (lo === hi) return null;
+  // Single point — no segment to draw but still zoom to it
+  if (startIdx === endIdx || lo === hi) return [gpsPhotos[startIdx]];
   return routePts.slice(lo, hi + 1);
 }
 

@@ -192,7 +192,7 @@ function highlightForDay(dayIdx) {
 export default function App() {
   const [hoveredPhoto, setHoveredPhoto] = useState(null);
   const [expandedPhoto, setExpandedPhoto] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 640);
   const [selectedDay, setSelectedDay] = useState(null);
   const boundsRef = useRef(null);
   const zoomRef = useRef(5);

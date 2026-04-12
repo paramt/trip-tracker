@@ -224,7 +224,7 @@ export default function WorldMap({
         const lngs = highlightRoute.map(p => p.lng);
         map.fitBounds(
           [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-          { animate: true, duration: 600, easing: easeInOut, padding: 80 }
+          { animate: true, duration: 600, easing: easeInOut, padding: Math.min(80, map.getContainer().offsetWidth * 0.1, map.getContainer().offsetHeight * 0.1) }
         );
       } else if (highlightRoute && highlightRoute.length === 1) {
         map.easeTo({ center: [highlightRoute[0].lng, highlightRoute[0].lat], zoom: 8, duration: 600 });

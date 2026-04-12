@@ -191,9 +191,6 @@ code {
   padding: 18px 0;
 }
 
-.sidebar-section-last {
-  padding-bottom: 0;
-}
 
 .sidebar-section-title {
   font-size: 10px;
@@ -213,6 +210,25 @@ code {
 
 .sidebar-desc a {
   color: #f0ede8;
+}
+
+.sidebar-footer {
+  width: 300px;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 18px 20px 16px;
+  border-top: 1px solid #2e2e2e;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+.sidebar-footer .sidebar-desc {
+  margin-bottom: 0;
+}
+
+.sidebar:not(.sidebar-open) .sidebar-footer {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Trip Legs ── */

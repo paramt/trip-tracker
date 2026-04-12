@@ -103,12 +103,13 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
           </section>
         )}
 
-        <section className="sidebar-section sidebar-section-last">
-          <p className="sidebar-desc">
-            Want to see more of my work?{' '}
-            <a href="https://param.me" target="_blank" rel="noopener noreferrer">Check out param.me</a>
-          </p>
-        </section>
+      </div>
+
+      <div className="sidebar-footer">
+        <p className="sidebar-desc">
+          Visit <a href="https://param.me" target="_blank" rel="noopener noreferrer">param.me</a>{' '}
+          to see more of my stuff
+        </p>
       </div>
     </aside>
   );

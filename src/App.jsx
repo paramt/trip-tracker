@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import '@fontsource-variable/caveat';
-import WorldMap, { projX, projY } from './components/WorldMap';
+import WorldMap from './components/WorldMap';
 import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
@@ -211,9 +211,12 @@ export default function App() {
   }, []);
 
   const activePhoto = hoveredPhoto;
-  const popupPos = activePhoto && boundsRef.current ? (() => {
-    const xPct = projX(activePhoto.lng, boundsRef.current) * 100;
-    const yPct = projY(activePhoto.lat, boundsRef.current) * 100;
+  const popupPos = activePhoto && boundsRef.current?.project ? (() => {
+    const { xPct: xFrac, yPct: yFrac } = boundsRef.current.project(activePhoto.lng, activePhoto.lat);
+    // If the marker is off-screen (e.g. on the back of the globe), suppress the popup
+    if (xFrac < 0 || xFrac > 1 || yFrac < 0 || yFrac > 1) return null;
+    const xPct = xFrac * 100;
+    const yPct = yFrac * 100;
     let xShift = '-50%';
     if (xPct < 15) xShift = '0%';
     else if (xPct > 85) xShift = '-100%';

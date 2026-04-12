@@ -64,11 +64,21 @@ function routeToGeoJSON(allRoutes) {
   };
 }
 
-// ── Emit bounds in the {lngMin,lngMax,latMin,latMax} shape App.jsx expects ───
+// ── Emit bounds + a map.project()-based pixel converter ──────────────────────
 function emitBoundsChange(map, cb) {
   if (!cb) return;
   const b = map.getBounds();
-  cb({ lngMin: b.getWest(), lngMax: b.getEast(), latMin: b.getSouth(), latMax: b.getNorth() });
+  const container = map.getContainer();
+  cb({
+    lngMin: b.getWest(), lngMax: b.getEast(),
+    latMin: b.getSouth(), latMax: b.getNorth(),
+    // project(lng, lat) → { xPct, yPct } in [0,1] relative to container
+    // Works correctly in both globe and flat Mercator projection.
+    project: (lng, lat) => {
+      const pt = map.project([lng, lat]);
+      return { xPct: pt.x / container.offsetWidth, yPct: pt.y / container.offsetHeight };
+    },
+  });
 }
 
 function addRouteLayer(map, allRoutes) {
@@ -97,9 +107,9 @@ function createMarkerEl(event, { onMarkerHover, onMarkerLeave, onMarkerClick }) 
     <path d="M12,0 C5.373,0 0,5.373 0,12 C0,21 12,32 12,32 C12,32 24,21 24,12 C24,5.373 18.627,0 12,0 Z"/>
     <circle cx="12" cy="11" r="4.5" fill="white" fill-opacity="0.45"/>
   </svg>`;
-  div.addEventListener("mouseenter", () => onMarkerHover?.(event));
+  div.addEventListener("mouseenter", () => { if (div.style.opacity !== '0') onMarkerHover?.(event); });
   div.addEventListener("mouseleave", () => onMarkerLeave?.());
-  div.addEventListener("click",      () => onMarkerClick?.(event));
+  div.addEventListener("click",      () => { if (div.style.opacity !== '0') onMarkerClick?.(event); });
   return div;
 }
 
@@ -135,21 +145,25 @@ export default function WorldMap({
       container: containerRef.current,
       style: OFM_STYLE,
       center: [-96, 38],
-      zoom: 3,
+      zoom: 0,
       attributionControl: false,
     });
     map.dragRotate.disable();
     map.touchZoomRotate.disableRotation();
 
     map.on("load", () => {
+      map.setProjection({ type: 'globe' });
+
       addRouteLayer(map, allRoutesRef.current);
 
-      // Fit to initial target
+      // Fly from globe view down to the route
       const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
-      map.fitBounds(
-        [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
-        { animate: false }
-      );
+      setTimeout(() => {
+        map.fitBounds(
+          [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
+          { animate: true, duration: 2000 }
+        );
+      }, 600);
     });
 
     map.on("move", () => emitBoundsChange(map, onBoundsChangeRef.current));
@@ -252,6 +266,7 @@ export default function WorldMap({
         const el = createMarkerEl(coord.event, callbacksRef.current);
         const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([coord.lng, coord.lat])
+          .setOpacity('1', '0')
           .addTo(map);
         existing.set(coord.event, { marker, el });
       }
@@ -262,6 +277,7 @@ export default function WorldMap({
       el.classList.toggle("map-marker-selected", event === selectedEvent);
       el.classList.toggle("map-marker-hovered",  event === hoveredEvent);
     }
+
   }, [allCoords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Update selected/hovered marker classes ────────────────────────────────
@@ -272,8 +288,28 @@ export default function WorldMap({
     }
   }, [selectedEvent, hoveredEvent]);
 
+  const starCanvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = starCanvasRef.current;
+    if (!canvas) return;
+    const { offsetWidth: w, offsetHeight: h } = canvas.parentElement;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    for (let i = 0; i < 250; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const r = Math.random() * 1.2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${(Math.random() * 0.6 + 0.2).toFixed(2)})`;
+      ctx.fill();
+    }
+  }, []);
+
   return (
     <div className="world-map" ref={containerRef}>
+      <canvas ref={starCanvasRef} className="star-field" />
       {children}
     </div>
   );

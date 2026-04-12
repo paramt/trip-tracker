@@ -300,10 +300,20 @@ code {
   position: relative;
   overflow: hidden;
   aspect-ratio: 400 / 260;
+  /* Dark space background — the WebGL canvas clear color is transparent,
+     so this shows through in the corners outside the globe sphere. */
+  background: #0a0a1a;
 }
 
 .world-map .maplibregl-ctrl-attrib,
 .world-map .maplibregl-ctrl-logo { display: none !important; }
+
+.star-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
 
 .map-marker {
   position: absolute;

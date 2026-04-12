@@ -58,16 +58,18 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
 function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
   return (
     <aside className={`sidebar${open ? ' sidebar-open' : ''}`}>
-      <button
-        className="sidebar-toggle"
-        onClick={onToggle}
-        aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-      >
-        <span className="sidebar-toggle-icon">{open ? '◀' : '▶'}</span>
-      </button>
+      <div className="sidebar-header">
+        <button
+          className="sidebar-toggle"
+          onClick={onToggle}
+          aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          <span className="sidebar-toggle-icon">{open ? '▶' : '◀'}</span>
+        </button>
+        <div className="sidebar-badge">LIVE</div>
+      </div>
 
       <div className="sidebar-titlebar">
-        <div className="sidebar-badge">LIVE</div>
         <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
       </div>
 
@@ -233,12 +235,6 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar
-        open={sidebarOpen}
-        onToggle={() => setSidebarOpen(o => !o)}
-        selectedDay={selectedDay}
-        onSelectDay={setSelectedDay}
-      />
       <div className="map-full" onMouseLeave={() => setHoveredPhoto(null)}>
         {rawPhotos.length === 0 ? (
           <div className="empty-state">
@@ -307,6 +303,12 @@ export default function App() {
           </>
         )}
       </div>
+      <Sidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(o => !o)}
+        selectedDay={selectedDay}
+        onSelectDay={setSelectedDay}
+      />
     </div>
   );
 }

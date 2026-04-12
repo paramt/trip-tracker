@@ -618,7 +618,11 @@ code {
 }
 
 .polaroid-expanded .polaroid {
-  width: min(480px, 85vw);
+  /* Constrain by viewport width AND height so portrait photos don't overflow on short screens.
+     (90vh - 80px) = usable height minus polaroid top/bottom padding + meta area.
+     Multiplying by the photo aspect ratio (width/height) gives the max polaroid width
+     that keeps the photo fully visible vertically. */
+  width: min(480px, 85vw, calc((90vh - 80px) * var(--photo-aspect, 1.5)));
 }
 
 @keyframes polaroidExpand {

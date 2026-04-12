@@ -287,6 +287,7 @@ export default function App() {
                 >✕</button>
                 <div
                   className="polaroid-expanded"
+                  style={expandedPhoto.width && expandedPhoto.height ? { '--photo-aspect': expandedPhoto.width / expandedPhoto.height } : undefined}
                   onClick={e => e.stopPropagation()}
                 >
                   <Polaroid

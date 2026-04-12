@@ -70,7 +70,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
       </div>
 
       <div className="sidebar-titlebar">
-        <h1 className="sidebar-title">Road Trip<br />Live Tracker</h1>
+        <h1 className="sidebar-title">Route 66<br />Road Trip Tracker</h1>
       </div>
 
       <div className="sidebar-body">

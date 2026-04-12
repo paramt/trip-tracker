@@ -211,6 +211,10 @@ code {
   margin-bottom: 16px;
 }
 
+.sidebar-desc a {
+  color: #f0ede8;
+}
+
 /* ── Trip Legs ── */
 .trip-legs {
   list-style: none;
@@ -245,41 +249,6 @@ code {
   line-height: 1.4;
 }
 
-/* ── Anniversary callout ── */
-.sidebar-anniversary {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.anniversary-badge {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #eb4034;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  letter-spacing: -0.03em;
-  margin-top: 2px;
-}
-
-.anniversary-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #f0ede8;
-  margin-bottom: 4px;
-}
-
-.anniversary-sub {
-  font-size: 12px;
-  color: #888;
-  line-height: 1.5;
-}
 
 
 /* ── Empty State ── */

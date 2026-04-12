@@ -103,14 +103,11 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
           </section>
         )}
 
-        <section className="sidebar-section sidebar-section-last sidebar-anniversary">
-          <div className="anniversary-badge">100</div>
-          <div>
-            <div className="anniversary-title">Route 66 Centennial</div>
-            <div className="anniversary-sub">
-              Route 66 was originally established in 1926, so we'll get to celebrate its anniversary :)
-            </div>
-          </div>
+        <section className="sidebar-section sidebar-section-last">
+          <p className="sidebar-desc">
+            Want to see more of my work?{' '}
+            <a href="https://param.me" target="_blank" rel="noopener noreferrer">Check out param.me</a>
+          </p>
         </section>
       </div>
     </aside>

@@ -212,6 +212,14 @@ export default function WorldMap({
       cc.style.transition = 'opacity 0.4s ease';
       cc.style.opacity = '1';
 
+      // Fade out loading indicator
+      const loading = loadingRef.current;
+      if (loading) {
+        loading.style.transition = 'opacity 0.4s ease';
+        loading.style.opacity = '0';
+        setTimeout(() => { loading.style.display = 'none'; }, 400);
+      }
+
       // Fly from globe view down to the route
       const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
       setTimeout(() => {
@@ -345,6 +353,8 @@ export default function WorldMap({
     }
   }, [selectedEvent, hoveredEvent]);
 
+  const loadingRef = useRef(null);
+
   const starCanvasRef = useRef(null);
   useEffect(() => {
     const canvas = starCanvasRef.current;
@@ -367,6 +377,25 @@ export default function WorldMap({
   return (
     <div className="world-map" ref={containerRef}>
       <canvas ref={starCanvasRef} className="star-field" />
+      <div ref={loadingRef} className="map-loading">
+        <svg className="loading-globe" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          {/* Globe outline */}
+          <circle cx="50" cy="50" r="38" className="gl-outline" />
+          {/* Latitude parallels — static */}
+          <ellipse cx="50" cy="31" rx="29" ry="8"  className="gl-lat" />
+          <ellipse cx="50" cy="50" rx="38" ry="10" className="gl-lat" />
+          <ellipse cx="50" cy="69" rx="29" ry="8"  className="gl-lat" />
+          {/* Meridians — 6 circles offset 30° apart, spin as a group */}
+          <g className="gl-meridians">
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer" />
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer gl-mer-b" />
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer gl-mer-c" />
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer gl-mer-d" />
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer gl-mer-e" />
+            <ellipse cx="50" cy="50" rx="38" ry="38" className="gl-mer gl-mer-f" />
+          </g>
+        </svg>
+      </div>
       {children}
     </div>
   );

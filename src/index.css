@@ -350,6 +350,9 @@ code {
   fill: none;
   stroke: rgba(255, 255, 255, 0.3);
   stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
   opacity: 0;
   animation: globe-spin 12s linear infinite, gl-mer-appear 0.3s ease-out forwards;
   animation-delay: 0s, 0s;
@@ -362,13 +365,13 @@ code {
 
 @keyframes globe-spin {
   /* Front hemisphere: sweep from edge → full face → edge */
-  0%   { rx: 0;  opacity: 0; }
-  2%   { rx: 2;  opacity: 1; }
-  25%  { rx: 38; opacity: 1; }
-  48%  { rx: 2;  opacity: 1; }
-  50%  { rx: 0;  opacity: 0; }
+  0%   { transform: scaleX(0);    opacity: 0; }
+  2%   { transform: scaleX(0.05); opacity: 1; }
+  25%  { transform: scaleX(1);    opacity: 1; }
+  48%  { transform: scaleX(0.05); opacity: 1; }
+  50%  { transform: scaleX(0);    opacity: 0; }
   /* Back hemisphere: hidden */
-  100% { rx: 0;  opacity: 0; }
+  100% { transform: scaleX(0);    opacity: 0; }
 }
 
 @keyframes gl-mer-appear {

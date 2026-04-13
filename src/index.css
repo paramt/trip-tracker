@@ -222,8 +222,24 @@ code {
   transition: opacity 0.15s;
 }
 
-.sidebar-footer .sidebar-desc {
+.sidebar-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-footer-links .sidebar-desc {
   margin-bottom: 0;
+}
+
+.sidebar-github-link {
+  display: inline-flex;
+  color: #888;
+  transition: color 0.15s;
+}
+
+.sidebar-github-link:hover {
+  color: #fff;
 }
 
 .sidebar:not(.sidebar-open) .sidebar-footer {

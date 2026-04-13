@@ -72,11 +72,14 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
 
 function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
   return (
-    <aside className={`sidebar${open ? ' sidebar-open' : ''}`}>
+    <aside
+      className={`sidebar${open ? ' sidebar-open' : ''}`}
+      onClick={!open ? onToggle : undefined}
+    >
       <div className="sidebar-header">
         <button
           className="sidebar-toggle"
-          onClick={onToggle}
+          onClick={e => { e.stopPropagation(); onToggle(); }}
           aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           <span className="sidebar-toggle-icon">{open ? '▶' : '◀'}</span>

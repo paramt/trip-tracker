@@ -8,6 +8,10 @@ const WORLD = { lngMin: -180, lngMax: 180,  latMin: -58, latMax: 80 };
 const NA    = { lngMin: -173, lngMax:  -26, latMin:  22, latMax: 73 };
 const CA    = { lngMin: -134, lngMax: -108, latMin:  32, latMax: 44 };
 const US    = { lngMin: -125, lngMax:  -66, latMin:  24, latMax: 50 };
+// On mobile (portrait), the wide US box zooms out too far; bias toward Chicago
+const US_MOBILE = { lngMin: -116, lngMax: -76, latMin: 29, latMax: 47 };
+
+function defaultUSBounds() { return window.innerWidth < 600 ? US_MOBILE : US; }
 
 function isCalifornia(lat, lng)   { return lat >= 32 && lat <= 42 && lng >= -125 && lng <= -114; }
 function isNorthAmerica(lat, lng) { return lat >= 22 && lat <= 73 && lng >= -170 && lng <= -50; }
@@ -221,7 +225,7 @@ export default function WorldMap({
       }
 
       // Fly from globe view down to the route
-      const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
+      const target = noZoomRef.current ? defaultUSBounds() : targetBoundsFor(coordsPtsRef.current);
       setTimeout(() => {
         map.fitBounds(
           [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
@@ -254,7 +258,7 @@ export default function WorldMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const target = noZoom ? US : targetBoundsFor(coordsPts);
+    const target = noZoom ? defaultUSBounds() : targetBoundsFor(coordsPts);
     const fit = () => map.fitBounds(
       [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
       { animate: true, duration: 500, easing: easeInOut }
@@ -294,7 +298,7 @@ export default function WorldMap({
       } else if (highlightRoute && highlightRoute.length === 1) {
         map.easeTo({ center: [highlightRoute[0].lng, highlightRoute[0].lat], zoom: 8, duration: 600 });
       } else if (!highlightRoute) {
-        const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
+        const target = noZoomRef.current ? defaultUSBounds() : targetBoundsFor(coordsPtsRef.current);
         map.fitBounds(
           [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
           { animate: true, duration: 600, easing: easeInOut }

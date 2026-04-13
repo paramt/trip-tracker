@@ -71,10 +71,12 @@ code {
   display: flex;
   flex-direction: column;
   z-index: 20;
+  cursor: pointer;
 }
 
 .sidebar-open {
   width: 300px;
+  cursor: default;
 }
 
 .sidebar-header {
@@ -84,6 +86,7 @@ code {
   align-items: center;
   justify-content: space-between;
   padding-right: 16px;
+  margin-top: 5px;
 }
 
 .sidebar-toggle {

@@ -146,6 +146,7 @@ export default function WorldMap({
       style: OFM_STYLE,
       center: [-96, 38],
       zoom: 0,
+      minZoom: 2,
       attributionControl: false,
     });
     map.dragRotate.disable();

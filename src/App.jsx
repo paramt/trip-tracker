@@ -5,6 +5,21 @@ import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
 
+// Apr 24 2026 noon EDT (UTC-4) = 16:00 UTC; May 4 2026 noon EDT = 16:00 UTC
+const TRIP_START = new Date('2026-04-24T16:00:00Z');
+const TRIP_END   = new Date('2026-05-04T16:00:00Z');
+
+function getTripStatus() {
+  const now = new Date();
+  if (now >= TRIP_START && now <= TRIP_END) return { label: 'LIVE', live: true };
+  if (now < TRIP_START) {
+    const days = Math.ceil((TRIP_START - now) / 864e5);
+    return { label: `STARTS IN ${days} DAY${days === 1 ? '' : 'S'}`, live: false };
+  }
+  const days = Math.floor((now - TRIP_END) / 864e5);
+  return { label: `ENDED ${days} DAY${days === 1 ? '' : 'S'} AGO`, live: false };
+}
+
 const TRIP_LEGS = [
   { icon: '🚗', label: 'Waterloo → Chicago' },
   { icon: '🛣️', label: 'Chicago → LA', note: 'via Historic Route 66' },
@@ -66,7 +81,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
         >
           <span className="sidebar-toggle-icon">{open ? '▶' : '◀'}</span>
         </button>
-        <div className="sidebar-badge">LIVE</div>
+        <div className={`sidebar-badge${getTripStatus().live ? ' sidebar-badge--live' : ''}`}>{getTripStatus().label}</div>
       </div>
 
       <div className="sidebar-titlebar">

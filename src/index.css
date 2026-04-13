@@ -154,7 +154,7 @@ code {
   padding: 2px 6px;
 }
 
-.sidebar-badge::before {
+.sidebar-badge--live::before {
   content: '';
   width: 6px;
   height: 6px;

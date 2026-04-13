@@ -1,29 +1,31 @@
 # Route 66 — Project Notes
 
 ## What this is
-React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process`, and every GPS-tagged photo is plotted on the map with a road-snapped route connecting them.
+React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process` to extract metadata and generate thumbnails, then run `npm run update-route` to fetch a road-snapped route. Every GPS-tagged photo is plotted on the map with the route connecting them.
 
 ## Git workflow
 Automated workflows frequently push commits to `main` (photo processing, thumbnail updates). Always `git pull` before committing or pushing to avoid rejected pushes.
 
 ## Workflow
 1. Drop photos (JPG, HEIC, PNG) into `public/photos/`
-2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, fetches road-snapped route from OSRM, writes `src/data/photos.json` and `src/data/route.json`
-3. `npm run dev` — view the map
+2. `npm run process` — extracts EXIF, converts HEIC → JPG, generates `.thumb.webp` thumbnails, reverse-geocodes GPS coords, writes `src/data/photos.json`
+3. `npm run update-route` — reads GPS-tagged photos from `photos.json`, fetches a road-snapped route from OpenRouteService, writes `src/data/route.json`
+4. `npm run dev` — view the map
 
 ## Architecture
 - **Map UI**: `WorldMap.jsx` (MapLibre GL JS), `Polaroid.jsx`, `Tack.jsx`. `App.jsx` drives everything from `photos.json` and `route.json`.
-- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `process.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty).
+- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `update-route.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty or missing).
 - **Image serving**: Photos live in `public/photos/` and are served by Vite as static assets at `/photos/...`. Thumbnails are WebP format (`.thumb.webp`).
 
 ## Map rendering — MapLibre GL JS
 
-The map uses **MapLibre GL JS** (WebGL, GPU-accelerated) with **OpenFreeMap positron tiles** (`https://tiles.openfreemap.org/styles/positron`). This replaced a custom canvas renderer that was CPU-bound and laggy on mobile.
+The map uses **MapLibre GL JS** (WebGL, GPU-accelerated) with **OpenFreeMap bright tiles** (`https://tiles.openfreemap.org/styles/bright`). This replaced a custom canvas renderer that was CPU-bound and laggy on mobile.
 
-- Style URL is set as `OFM_STYLE` constant in `WorldMap.jsx` — swap to `liberty` or `bright` for a different look
+- Style URL is set as `OFM_STYLE` constant in `WorldMap.jsx` — swap to another OpenFreeMap style if needed
 - Route line and markers are our own layers/elements on top of the OpenFreeMap base
-- `projX`/`projY` are still exported from `WorldMap.jsx` and used by `App.jsx` to position the photo popup. They take `{ lngMin, lngMax, latMin, latMax }` which `onBoundsChange` emits from `map.getBounds()` on every `move` event
-- Markers are `maplibregl.Marker` instances with custom DOM elements (`anchor: 'center'`). `.map-marker` CSS must NOT have `transform: translate(-50%, -50%)` — MapLibre's anchor handles centering
+- `onBoundsChange` emits both geographic bounds from `map.getBounds()` and a `project(lng, lat)` helper backed by `map.project()`. `App.jsx` uses that projector to position the photo popup correctly in both globe and Mercator views
+- `projX`/`projY` are still exported from `WorldMap.jsx`, but the popup no longer uses them
+- Markers are `maplibregl.Marker` instances with custom DOM elements (`anchor: 'bottom'`). `.map-marker` CSS must NOT add its own centering transform to the marker root — MapLibre handles marker placement
 - `map.dragRotate.disable()` and `map.touchZoomRotate.disableRotation()` keep the map north-up
 
 ### Globe projection — hiding the canvas until load
@@ -58,7 +60,7 @@ map.addLayer({ ..., layout: { 'line-cap': 'round', 'line-join': 'round' }, paint
 If you include `glyphs: ""` in a custom style object, MapLibre throws `"glyphs" url must include a "{fontstack}" token`. Omit `glyphs` entirely when there are no symbol/label layers.
 
 ### Popup positioning
-`App.jsx` positions the Polaroid popup using `projX(photo.lng, boundsRef.current)` and `projY(photo.lat, boundsRef.current)`. `boundsRef` is updated via `onBoundsChange` on every `map.on('move')` event so the popup tracks in real time during pan/zoom.
+`App.jsx` positions the Polaroid popup using `boundsRef.current.project(photo.lng, photo.lat)`, where `project` is provided by `WorldMap.jsx` via `onBoundsChange`. This keeps the popup aligned during pan/zoom and works correctly with globe projection, including suppressing the popup when the marker is on the back side of the globe.
 
 ### Expanded Polaroid overlay
 Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the photo centered and enlarged. Key design decisions:
@@ -67,7 +69,7 @@ Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the phot
 - **Stable rotation angle**: `_rotate` is computed once at module level (in the `gpsPhotos.map()`) and passed as the `rotate` prop to both the hover popup and the expanded Polaroid. Without this, `Polaroid` picks a new random angle on each mount, so the popup and expanded views would tilt differently.
 - **Overlay dismissal**: The backdrop `onClick` closes the overlay; `e.stopPropagation()` on the inner `div.polaroid-expanded` prevents clicks on the photo itself from bubbling up to the backdrop handler.
 - **No hover popup while expanded**: `{activePhoto && popupPos && !expandedPhoto && ...}` hides the hover popup when the overlay is open.
-- **Width override**: `.polaroid-expanded .polaroid { width: min(480px, 85vw) }` overrides the fixed `260px` set on `.polaroid`. Put this after the base `.polaroid` rule so specificity works.
+- **Width override**: `.polaroid-expanded .polaroid { width: min(480px, 85vw, calc((90vh - 80px) * var(--photo-aspect, 1.5))) }` overrides the fixed `260px` set on `.polaroid` and also constrains portrait images by viewport height. Put this after the base `.polaroid` rule so specificity works.
 - **Spring animation**: `cubic-bezier(0.34, 1.4, 0.64, 1)` gives the polaroid a slight overshoot for a snappy feel. The `@keyframes polaroidExpand` scales from `0.25` to `1` — keep `transform: scale(1)` in the `to` frame, not `transform: none`, or it may conflict with the rotation applied via `--polaroid-rotate`.
 
 ## Sidebar
@@ -85,28 +87,28 @@ Clicking a day calls `setSelectedDay(i)`, which recomputes `highlightRoute` via 
 `photoRouteIndices` maps each GPS photo to its nearest point index in `routePts` (= `globalRoute[0]`), computed once at module level with a simple O(n·m) nearest-neighbour scan.
 
 `highlightForDay(i)` slices `routePts` between:
-- `r0 = photoRouteIndices[dayGroups[i].firstPhotoIdx]`
-- `r1 = photoRouteIndices[dayGroups[i+1].firstPhotoIdx]` for intermediate days, or `routePts.length - 1` for the last day
+- `r0 = photoRouteIndices[lastPhotoIdx(i - 1)]` for intermediate days, or the current day's first photo for day 0
+- `r1 = photoRouteIndices[lastPhotoIdx(i)]`
 
-Using `d(i+1).firstPhotoIdx` (not `d(i+1).firstPhotoIdx - 1`) as the endpoint ensures single-photo days still produce a visible segment.
+This means selecting a day highlights the segment traveled during that day. Single-photo selections fall back to a one-point highlight so the map can still zoom to that location.
 
 `WorldMap` accepts a `highlightRoute` prop and maintains a `route-highlight` GeoJSON source + line layer (yellow, 5px, opacity 0.9) added in `addRouteLayer` alongside the base `route` layer. The highlight effect uses a direct `map.getSource("route-highlight")` existence check rather than `map.isStyleLoaded()` — the latter can spuriously return `false` while tiles are loading, silently dropping the update.
 
 ## Road-snapped routing
 
-The route follows actual roads via **OpenRouteService (ORS)**. Routing happens at process time in `process.js`, not in the browser. Requires `ORS_API_KEY` env var (or GitHub Actions secret).
+The route follows actual roads via **OpenRouteService (ORS)**. Routing happens in `update-route.js`, not in the browser. Requires `ORS_API_KEY` env var (or GitHub Actions secret).
 
 ### How it works
-1. After sorting all GPS photos chronologically, `process.js` calls `fetchRoadRouteBatched(gpsWaypoints)`
+1. `update-route.js` reads `src/data/photos.json`, filters to GPS-tagged photos, and computes `gpsWaypoints`
 2. ORS endpoint: POST `https://api.openrouteservice.org/v2/directions/driving-car/geojson`
    - Headers: `Authorization: <ORS_API_KEY>`, `Content-Type: application/json`
-   - Body: `{ "coordinates": [[lng, lat], ...] }`
+   - Body: `{ "coordinates": [[lng, lat], ...], "radiuses": [-1, ...] }`
 3. Returns `[[lng, lat], ...]` coordinates — a full-resolution road-following polyline
 4. Written to `src/data/route.json` as `{ waypointHash, coordinates }`
 5. `App.jsx` imports `route.json` and converts `[lng, lat]` pairs to `{ lat, lng }` objects for `WorldMap`
 
 ### Caching
-`process.js` computes `waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]))` and compares it to the stored hash. If unchanged and `coordinates` is non-empty, the ORS fetch is skipped.
+`update-route.js` computes `waypointHash = JSON.stringify(gpsWaypoints.map(p => [p.lat, p.lng]))` and compares it to the stored hash. If unchanged and `coordinates` is non-empty, the ORS fetch is skipped.
 
 ### Batching
 `fetchRoadRouteBatched` splits requests into chunks of 40 waypoints (ORS free tier limit is ~50; 40 used as a safety margin) with 1-waypoint overlap between chunks (to avoid gaps at joins). Each batch waits 1s between requests.
@@ -115,7 +117,7 @@ The route follows actual roads via **OpenRouteService (ORS)**. Routing happens a
 `fetchRoadRoute` retries up to 3 times with 3s/6s/9s backoff. Timeout is 300s (5 minutes) per request. ORS returns structured error objects `{ error: { code, message } }` which are thrown directly.
 
 ### Fallback
-If ORS fails after all retries (including a missing API key), `process.js` writes `coordinates: []` to `route.json` and continues without crashing. `App.jsx` detects the empty array and falls back to straight lines between photo coordinates (the original behavior).
+If ORS fails after all retries (including a missing API key), `update-route.js` exits with code 1 and leaves the existing `route.json` untouched. `App.jsx` still falls back to straight lines when `route.json` is missing coordinates or contains an empty array.
 
 ### ORS 6,000 km per-request limit
 ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`error 2004`). The limit applies per batch (40 waypoints), not to the total trip, so trips longer than 6,000 km are fine as long as no 40 consecutive waypoints span more than that. In practice this is never an issue at normal photo density. It does bite with test data that mixes geographically distant trips — e.g. California photos from 2025 mixed with Ontario/New York photos from 2026 — which creates a chronologically-sorted route that zig-zags cross-continent within a single batch.
@@ -159,4 +161,3 @@ When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up
 
 ### CSS filter gotcha — ICC color profiles
 Applying *any* CSS `filter` (even `filter: grayscale(0%)`, which is visually a no-op) forces the browser into GPU compositing mode, which bypasses ICC color profile handling. Images with Display P3 or HDR gain maps render as sRGB, causing highlights to appear blown out. Color polaroids must use `filter: none`, not `filter: grayscale(0%)`
-

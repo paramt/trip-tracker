@@ -150,6 +150,9 @@ export default function WorldMap({
     });
     map.dragRotate.disable();
     map.touchZoomRotate.disableRotation();
+    // Hide the canvas until globe projection is set — prevents the flat
+    // Mercator world flash that shows while the tile style is loading.
+    map.getCanvas().style.opacity = '0';
 
     map.on("load", () => {
       map.setProjection({ type: 'globe' });
@@ -200,6 +203,11 @@ export default function WorldMap({
 
       addRouteLayer(map, allRoutesRef.current);
 
+      // Reveal the canvas now that globe projection is active
+      const canvas = map.getCanvas();
+      canvas.style.transition = 'opacity 0.4s ease';
+      canvas.style.opacity = '1';
+
       // Fly from globe view down to the route
       const target = noZoomRef.current ? US : targetBoundsFor(coordsPtsRef.current);
       setTimeout(() => {
@@ -240,7 +248,8 @@ export default function WorldMap({
       { animate: true, duration: 500, easing: easeInOut }
     );
     if (map.loaded()) fit();
-    else map.once("load", fit);
+    // else: on initial mount the map isn't loaded yet; the load handler handles
+    // the first zoom so we don't register a competing once("load") here.
   }, [coords, noZoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Update route source when allRoutes changes ────────────────────────────

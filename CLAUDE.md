@@ -26,6 +26,25 @@ The map uses **MapLibre GL JS** (WebGL, GPU-accelerated) with **OpenFreeMap posi
 - Markers are `maplibregl.Marker` instances with custom DOM elements (`anchor: 'center'`). `.map-marker` CSS must NOT have `transform: translate(-50%, -50%)` — MapLibre's anchor handles centering
 - `map.dragRotate.disable()` and `map.touchZoomRotate.disableRotation()` keep the map north-up
 
+### Globe projection — hiding the canvas until load
+
+On initial load, MapLibre renders a frame or two in flat Mercator before the `load` event fires and `setProjection({ type: 'globe' })` is called. To prevent this flash, hide the map until it's ready:
+
+```js
+map.getCanvasContainer().style.opacity = '0';
+map.on('load', () => {
+  map.setProjection({ type: 'globe' });
+  // ... setup ...
+  const cc = map.getCanvasContainer();
+  cc.style.transition = 'opacity 0.4s ease';
+  cc.style.opacity = '1';
+});
+```
+
+**Must use `getCanvasContainer()` (the wrapper div), not `getCanvas()` (the WebGL canvas).** Firefox's WebGL compositor can present the canvas to screen before CSS `opacity` on the canvas element itself propagates through the compositor pipeline, causing the flat-map flash to still appear in Firefox. A regular HTML div (`canvasContainer`) is composited consistently across all browsers.
+
+**Do not use `styledata` to set globe projection early** — `styledata` fires before the Mercator→globe transition completes, causing a blank white globe flash before tiles render.
+
 ### MapLibre + React StrictMode gotcha
 In dev, StrictMode mounts → unmounts → remounts. On the second mount, `markersRef.current` (a `Map<event, Marker>`) still has entries from the first mount (attached to the now-removed map), so the marker sync effect skips creating new ones. Fix: clear `markersRef.current` in the map init `useEffect` cleanup alongside `map.remove()`.
 

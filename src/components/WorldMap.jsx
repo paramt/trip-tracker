@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 
-const OFM_STYLE = "https://tiles.openfreemap.org/styles/positron";
+const OFM_STYLE = "https://tiles.openfreemap.org/styles/bright";
 
 // ── Projection ────────────────────────────────────────────────────────────────
 const WORLD = { lngMin: -180, lngMax: 180,  latMin: -58, latMax: 80 };
@@ -153,6 +153,50 @@ export default function WorldMap({
 
     map.on("load", () => {
       map.setProjection({ type: 'globe' });
+
+      // Hide all POI icons and labels
+      map.getStyle().layers
+        .filter(l => l.id.startsWith("poi"))
+        .forEach(l => map.setLayoutProperty(l.id, "visibility", "none"));
+
+      // Recolor yellow roads to minimalist gray/white
+      const roadColors = {
+        "highway-motorway-link":      "#d0d0d0",
+        "highway-secondary-tertiary": "#e0e0e0",
+        "highway-primary":            "#d8d8d8",
+        "highway-trunk":              "#d8d8d8",
+        "highway-motorway":           "#d0d0d0",
+        "bridge-motorway-link":       "#d0d0d0",
+        "bridge-link":                "#e0e0e0",
+        "bridge-secondary-tertiary":  "#e0e0e0",
+        "bridge-trunk-primary":       "#d8d8d8",
+        "bridge-motorway":            "#d0d0d0",
+        "tunnel-link":                "#e8e8e8",
+        "tunnel-secondary-tertiary":  "#e8e8e8",
+        "tunnel-trunk-primary":       "#e0e0e0",
+        "tunnel-motorway":            "#d8d8d8",
+      };
+      for (const [id, color] of Object.entries(roadColors)) {
+        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", color);
+      }
+
+      // Recolor yellow road casings (outlines) to gray
+      const casingColor = "#c8c8c8";
+      const casingLayers = [
+        "tunnel-motorway-link-casing", "tunnel-link-casing",
+        "tunnel-secondary-tertiary-casing", "tunnel-trunk-primary-casing",
+        "tunnel-motorway-casing", "highway-motorway-link-casing",
+        "highway-link-casing", "highway-secondary-tertiary-casing",
+        "highway-primary-casing", "highway-trunk-casing",
+        "highway-motorway-casing", "bridge-motorway-link-casing",
+        "bridge-link-casing", "bridge-secondary-tertiary-casing",
+        "bridge-trunk-primary-casing", "bridge-motorway-casing",
+      ];
+      for (const id of casingLayers) {
+        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", casingColor);
+      }
+
+
 
       addRouteLayer(map, allRoutesRef.current);
 

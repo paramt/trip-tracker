@@ -16,7 +16,6 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DUMP_DIR    = path.join(__dirname, '../public/photos');
 const OUT_FILE    = path.join(__dirname, '../src/data/photos.json');
-const ROUTE_FILE  = path.join(__dirname, '../src/data/route.json');
 const THUMB_WIDTH = 400;
 const THUMB_QUALITY = 70;
 
@@ -34,65 +33,6 @@ async function reverseGeocode(lat, lng) {
   } catch {
     return null;
   }
-}
-
-export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_000 } = {}) {
-  const apiKey = process.env.ORS_API_KEY;
-  if (!apiKey) throw new Error('ORS_API_KEY environment variable is not set');
-
-  const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-  const body = JSON.stringify({
-    coordinates: waypoints.map(p => [p.lng, p.lat]),
-    radiuses: waypoints.map(() => -1), // -1 = unlimited snapping radius
-  });
-
-  let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    if (attempt > 0) {
-      process.stdout.write(` (retry ${attempt})`);
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    }
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
-        body,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        const msg = data.error ? `${data.error.code}: ${data.error.message}` : res.status;
-        throw new Error(`ORS error ${msg}`);
-      }
-      if (!data.features?.[0]?.geometry?.coordinates)
-        throw new Error('ORS response missing geometry');
-      return {
-        coordinates: data.features[0].geometry.coordinates, // [[lng, lat], ...]
-        distanceMeters: data.features[0].properties?.summary?.distance ?? 0,
-      };
-    } catch (err) {
-      lastErr = err;
-      process.stderr.write(`\n  attempt ${attempt + 1}/${retries + 1} failed: ${err.message}`);
-    }
-  }
-  throw lastErr;
-}
-
-export async function fetchRoadRouteBatched(waypoints) {
-  const BATCH = 40; // ORS free tier: 50 waypoints max; 40 for safety
-  if (waypoints.length <= BATCH) return fetchRoadRoute(waypoints);
-  const segments = [];
-  let totalDistance = 0;
-  for (let i = 0; i < waypoints.length - 1; i += BATCH - 1) {
-    const chunk = waypoints.slice(i, i + BATCH);
-    const { coordinates, distanceMeters } = await fetchRoadRoute(chunk);
-    if (segments.length > 0) coordinates.shift(); // remove duplicate junction point
-    segments.push(...coordinates);
-    totalDistance += distanceMeters;
-    if (i + BATCH - 1 < waypoints.length - 1)
-      await new Promise(r => setTimeout(r, 1000));
-  }
-  return { coordinates: segments, distanceMeters: totalDistance };
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.heic', '.png']);

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-
-const OFM_STYLE = "https://tiles.openfreemap.org/styles/bright";
+import { MAP_STYLE, MAP_PROJECTION } from "../trip.config.js";
 
 // ── Projection ────────────────────────────────────────────────────────────────
 const WORLD = { lngMin: -180, lngMax: 180,  latMin: -58, latMax: 80 };
@@ -147,7 +146,7 @@ export default function WorldMap({
   useEffect(() => {
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: OFM_STYLE,
+      style: MAP_STYLE,
       center: [-96, 38],
       zoom: 0,
       minZoom: 2,
@@ -163,7 +162,7 @@ export default function WorldMap({
     map.getCanvasContainer().style.opacity = '0';
 
     map.on("load", () => {
-      map.setProjection({ type: 'globe' });
+      map.setProjection({ type: MAP_PROJECTION });
 
       // Hide all POI icons and labels
       map.getStyle().layers

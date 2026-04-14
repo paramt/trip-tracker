@@ -63,7 +63,7 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
+function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTime }) {
   return (
     <aside
       className={`sidebar${open ? ' sidebar-open' : ''}`}
@@ -101,6 +101,22 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
             ))}
           </ul>
         </section>
+
+        {distanceKm && (
+          <section className="sidebar-section">
+            <h2 className="sidebar-section-title">Trip Stats</h2>
+            <div className="trip-stats">
+              <div className="trip-stat">
+                <div className="trip-stat-value">{distanceKm} km</div>
+                <div className="trip-stat-label">Total Route</div>
+              </div>
+              <div className="trip-stat">
+                <div className="trip-stat-value">{tripTime ?? '—'}</div>
+                <div className="trip-stat-label">Trip Time</div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {dayGroups.length > 0 && (
           <section className="sidebar-section">
@@ -180,6 +196,18 @@ const dayGroups = (() => {
     map[day].photos.push(photo);
   });
   return Object.values(map);
+})();
+
+// Trip duration: first photo → min(now, TRIP_END)
+const tripTime = (() => {
+  if (!gpsPhotos.length) return null;
+  const start = new Date(gpsPhotos[0].datetime);
+  const end = new Date(Math.min(Date.now(), TRIP_END.getTime()));
+  const ms = end - start;
+  if (ms <= 0) return null;
+  const days = Math.floor(ms / 864e5);
+  const hours = Math.floor((ms % 864e5) / 36e5);
+  return `${days}d ${hours}h`;
 })();
 
 // Nearest route point index for each GPS photo
@@ -336,6 +364,8 @@ export default function App() {
         onToggle={() => setSidebarOpen(o => !o)}
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
+        distanceKm={rawRoute.distanceMeters ? Math.round(rawRoute.distanceMeters / 1000).toLocaleString() : null}
+        tripTime={tripTime}
       />
     </div>
   );

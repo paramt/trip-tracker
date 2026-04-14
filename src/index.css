@@ -286,6 +286,34 @@ code {
 
 
 
+/* ── Trip Stats ── */
+.trip-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.trip-stat {
+  background: #242424;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.trip-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0ede8;
+  line-height: 1.2;
+}
+
+.trip-stat-label {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* ── Empty State ── */
 .empty-state {
   padding: 24px;

@@ -50,17 +50,18 @@ async function main() {
 
   // fetchRoadRouteBatched throws after built-in retries — we let it propagate so the
   // process exits 1 and route.json is left untouched (last known good route preserved).
-  let coordinates;
+  let coordinates, distanceMeters;
   try {
-    coordinates = await fetchRoadRouteBatched(gpsWaypoints);
+    ({ coordinates, distanceMeters } = await fetchRoadRouteBatched(gpsWaypoints));
   } catch (err) {
     console.error(`\nORS fetch failed after all retries — route.json not updated.`);
     console.error(`Last error: ${err.message}`);
     process.exit(1);
   }
 
-  await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates }, null, 2));
-  console.log(`\n✓ ${coordinates.length} road-snapped points written → src/data/route.json`);
+  await writeFile(ROUTE_FILE, JSON.stringify({ waypointHash, coordinates, distanceMeters }, null, 2));
+  const km = (distanceMeters / 1000).toFixed(0);
+  console.log(`\n✓ ${coordinates.length} road-snapped points written → src/data/route.json (${km} km)`);
 }
 
 main().catch(err => { console.error(err.message); process.exit(1); });

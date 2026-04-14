@@ -66,7 +66,10 @@ export async function fetchRoadRoute(waypoints, { retries = 3, timeoutMs = 300_0
       }
       if (!data.features?.[0]?.geometry?.coordinates)
         throw new Error('ORS response missing geometry');
-      return data.features[0].geometry.coordinates; // [[lng, lat], ...]
+      return {
+        coordinates: data.features[0].geometry.coordinates, // [[lng, lat], ...]
+        distanceMeters: data.features[0].properties?.summary?.distance ?? 0,
+      };
     } catch (err) {
       lastErr = err;
       process.stderr.write(`\n  attempt ${attempt + 1}/${retries + 1} failed: ${err.message}`);
@@ -79,15 +82,17 @@ export async function fetchRoadRouteBatched(waypoints) {
   const BATCH = 40; // ORS free tier: 50 waypoints max; 40 for safety
   if (waypoints.length <= BATCH) return fetchRoadRoute(waypoints);
   const segments = [];
+  let totalDistance = 0;
   for (let i = 0; i < waypoints.length - 1; i += BATCH - 1) {
     const chunk = waypoints.slice(i, i + BATCH);
-    const coords = await fetchRoadRoute(chunk);
-    if (segments.length > 0) coords.shift(); // remove duplicate junction point
-    segments.push(...coords);
+    const { coordinates, distanceMeters } = await fetchRoadRoute(chunk);
+    if (segments.length > 0) coordinates.shift(); // remove duplicate junction point
+    segments.push(...coordinates);
+    totalDistance += distanceMeters;
     if (i + BATCH - 1 < waypoints.length - 1)
       await new Promise(r => setTimeout(r, 1000));
   }
-  return segments;
+  return { coordinates: segments, distanceMeters: totalDistance };
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.heic', '.png']);

@@ -4,10 +4,9 @@ import WorldMap from './components/WorldMap';
 import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
+import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, PAGE_TITLE } from './trip.config.js';
 
-// Apr 24 2026 noon EDT (UTC-4) = 16:00 UTC; May 4 2026 noon EDT = 16:00 UTC
-const TRIP_START = new Date('2026-04-24T16:00:00Z');
-const TRIP_END   = new Date('2026-05-04T16:00:00Z');
+document.title = PAGE_TITLE;
 
 function getTripStatus() {
   const now = new Date();
@@ -19,12 +18,6 @@ function getTripStatus() {
   const days = Math.floor((now - TRIP_END) / 864e5);
   return { label: `ENDED ${days} DAY${days === 1 ? '' : 'S'} AGO`, live: false };
 }
-
-const TRIP_LEGS = [
-  { icon: '🚗', label: 'Waterloo → Chicago' },
-  { icon: '🛣️', label: 'Chicago → LA', note: 'via Historic Route 66' },
-  { icon: '🌊', label: 'LA → San Francisco', note: 'via the Pacific Coast Highway' },
-];
 
 // ── Day Timeline ──────────────────────────────────────────────────────────────
 
@@ -88,14 +81,13 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay }) {
       </div>
 
       <div className="sidebar-titlebar">
-        <h1 className="sidebar-title">Route 66<br />Road Trip Tracker</h1>
+        <h1 className="sidebar-title">{TRIP_TITLE.split('\n').map((line, i, arr) => <span key={i}>{line}{i < arr.length - 1 && <br />}</span>)}</h1>
       </div>
 
       <div className="sidebar-body">
         <section className="sidebar-section">
           <p className="sidebar-desc">
-            See live updates from my Route 66 road trip as photos from my phone are synced and the timeline is auto generated using metadata. 
-            The plan is: 
+            {TRIP_DESCRIPTION}
           </p>
           <ul className="trip-legs">
             {TRIP_LEGS.map(leg => (

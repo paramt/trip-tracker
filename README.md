@@ -106,3 +106,4 @@ scripts/
 - HEIC files are automatically converted to JPG during processing; the originals are not deleted
 - The route is cached by a hash of your waypoints — it only re-fetches from ORS when photos change
 - The free ORS tier supports up to ~50 waypoints per request; the script batches automatically for longer trips
+- Sidebar stats (Photos, Cities, States/Provinces) come from `photos.json`; Distance Covered comes from `route.json`. If ORS has never succeeded, the stats section is hidden. If ORS fails on a re-run, the previous distance and route are shown unchanged — stale but consistent

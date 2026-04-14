@@ -14,7 +14,7 @@ Automated workflows frequently push commits to `main` (photo processing, thumbna
 
 ## Architecture
 - **Map UI**: `WorldMap.jsx` (MapLibre GL JS), `Polaroid.jsx`, `Tack.jsx`. `App.jsx` drives everything from `photos.json` and `route.json`.
-- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `update-route.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty or missing).
+- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, distanceMeters, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `update-route.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty or missing).
 - **Image serving**: Photos live in `public/photos/` and are served by Vite as static assets at `/photos/...`. Thumbnails are WebP format (`.thumb.webp`).
 
 ## Map rendering — MapLibre GL JS
@@ -76,6 +76,22 @@ Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the phot
 
 A collapsible dark sidebar (`#1a1a1a`) sits left of the map. State lives in `App` (`sidebarOpen`, `selectedDay`) and is passed as props to `<Sidebar>`. Width transitions via CSS (`width: 44px` collapsed → `width: 300px` open); the inner `.sidebar-body` is fixed at 300px so content never reflows during animation.
 
+### Trip Stats
+
+The sidebar shows a stats grid computed at module level in `App.jsx`:
+
+| Stat | Source |
+|---|---|
+| Trip Time | `gpsPhotos[0].datetime` → `min(now, TRIP_END)`, computed client-side |
+| Photos | `rawPhotos.length` (all photos including non-GPS) |
+| States / Provinces | unique state codes parsed from `photo.location` (e.g. `"Waterloo, ON"` → `ON`) |
+| Cities | unique `photo.location` strings across all photos |
+| Distance Covered | `rawRoute.distanceMeters` from `route.json`, shown as a progress bar against a 6,000 km estimate |
+
+`photo.location` and GPS coordinates come from `process.js`. `distanceMeters` comes from `update-route.js` (ORS `features[0].properties.summary.distance`). Trip Time needs neither script — it's derived from EXIF datetime and `trip.config.js`.
+
+The stats section only renders when `distanceKm` is non-null (i.e. `route.json` has a `distanceMeters` value). The progress bar denominator is `TRIP_DISTANCE_KM` from `trip.config.js`.
+
 ### Day-by-day timeline
 
 `dayGroups` is computed at module level by grouping `gpsPhotos` (already sorted chronologically) by `datetime.slice(0, 10)`. Each group stores `firstPhotoIdx` — the index of its first photo in `gpsPhotos`.
@@ -104,7 +120,7 @@ The route follows actual roads via **OpenRouteService (ORS)**. Routing happens i
    - Headers: `Authorization: <ORS_API_KEY>`, `Content-Type: application/json`
    - Body: `{ "coordinates": [[lng, lat], ...], "radiuses": [-1, ...] }`
 3. Returns `[[lng, lat], ...]` coordinates — a full-resolution road-following polyline
-4. Written to `src/data/route.json` as `{ waypointHash, coordinates }`
+4. Written to `src/data/route.json` as `{ waypointHash, distanceMeters, coordinates }`
 5. `App.jsx` imports `route.json` and converts `[lng, lat]` pairs to `{ lat, lng }` objects for `WorldMap`
 
 ### Caching
@@ -118,6 +134,10 @@ The route follows actual roads via **OpenRouteService (ORS)**. Routing happens i
 
 ### Fallback
 If ORS fails after all retries (including a missing API key), `update-route.js` exits with code 1 and leaves the existing `route.json` untouched. `App.jsx` still falls back to straight lines when `route.json` is missing coordinates or contains an empty array.
+
+Because `distanceMeters` and `coordinates` are always written together, the Distance Covered stat and the map route stay consistent:
+- **ORS never succeeded**: `distanceMeters` is absent → stats section hidden, map shows straight lines.
+- **ORS previously succeeded, fails on re-run**: `route.json` is untouched → map shows the old road-snapped route and `distanceMeters` reflects that same fetch. Both are stale but consistent. The only edge case is when new photos were added between the last good fetch and the failure — the map shows straight lines for new waypoints while the stat still shows the previous distance.
 
 ### ORS 6,000 km per-request limit
 ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`error 2004`). The limit applies per batch (40 waypoints), not to the total trip, so trips longer than 6,000 km are fine as long as no 40 consecutive waypoints span more than that. In practice this is never an issue at normal photo density. It does bite with test data that mixes geographically distant trips — e.g. California photos from 2025 mixed with Ontario/New York photos from 2026 — which creates a chronologically-sorted route that zig-zags cross-continent within a single batch.

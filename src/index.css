@@ -293,6 +293,10 @@ code {
   gap: 10px;
 }
 
+.trip-stats > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .trip-stat {
   background: #242424;
   border-radius: 8px;
@@ -312,6 +316,32 @@ code {
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.trip-stat--progress .trip-stat-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.trip-stat-progress-target {
+  font-size: 12px;
+  color: #555;
+}
+
+.trip-stat-progress-bar {
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  margin: 8px 0 4px;
+  overflow: hidden;
+}
+
+.trip-stat-progress-fill {
+  height: 100%;
+  background: #f0ede8;
+  border-radius: 2px;
+  transition: width 0.4s ease;
 }
 
 /* ── Empty State ── */

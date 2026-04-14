@@ -4,7 +4,7 @@ import WorldMap from './components/WorldMap';
 import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
-import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, PAGE_TITLE } from './trip.config.js';
+import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, PAGE_TITLE, TRIP_DISTANCE_KM } from './trip.config.js';
 
 document.title = PAGE_TITLE;
 
@@ -63,7 +63,7 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTime }) {
+function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTime, photoCount, citiesVisited, statesVisited }) {
   return (
     <aside
       className={`sidebar${open ? ' sidebar-open' : ''}`}
@@ -107,12 +107,33 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
             <h2 className="sidebar-section-title">Trip Stats</h2>
             <div className="trip-stats">
               <div className="trip-stat">
-                <div className="trip-stat-value">{distanceKm} km</div>
-                <div className="trip-stat-label">Total Route</div>
-              </div>
-              <div className="trip-stat">
                 <div className="trip-stat-value">{tripTime ?? '—'}</div>
                 <div className="trip-stat-label">Trip Time</div>
+              </div>
+              <div className="trip-stat">
+                <div className="trip-stat-value">{photoCount}</div>
+                <div className="trip-stat-label">Photos</div>
+              </div>
+              <div className="trip-stat">
+                <div className="trip-stat-value">{statesVisited || '—'}</div>
+                <div className="trip-stat-label">States / Provinces</div>
+              </div>
+              <div className="trip-stat">
+                <div className="trip-stat-value">{citiesVisited || '—'}</div>
+                <div className="trip-stat-label">Cities</div>
+              </div>
+              <div className="trip-stat trip-stat--progress">
+                <div className="trip-stat-progress-header">
+                  <span className="trip-stat-value">{distanceKm?.toLocaleString()} km</span>
+                  <span className="trip-stat-progress-target">est. {TRIP_DISTANCE_KM.toLocaleString()} km</span>
+                </div>
+                <div className="trip-stat-progress-bar">
+                  <div
+                    className="trip-stat-progress-fill"
+                    style={{ width: `${Math.min(100, (distanceKm / TRIP_DISTANCE_KM) * 100)}%` }}
+                  />
+                </div>
+                <div className="trip-stat-label">Distance Covered</div>
               </div>
             </div>
           </section>
@@ -197,6 +218,13 @@ const dayGroups = (() => {
   });
   return Object.values(map);
 })();
+
+// Derived stats from photo metadata
+const photoCount = rawPhotos.length;
+const citiesVisited = new Set(rawPhotos.map(p => p.location).filter(Boolean)).size;
+const statesVisited = new Set(
+  rawPhotos.map(p => p.location?.split(',').pop()?.trim()).filter(Boolean)
+).size;
 
 // Trip duration: first photo → min(now, TRIP_END)
 const tripTime = (() => {
@@ -364,8 +392,11 @@ export default function App() {
         onToggle={() => setSidebarOpen(o => !o)}
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
-        distanceKm={rawRoute.distanceMeters ? Math.round(rawRoute.distanceMeters / 1000).toLocaleString() : null}
+        distanceKm={rawRoute.distanceMeters ? Math.round(rawRoute.distanceMeters / 1000) : null}
         tripTime={tripTime}
+        photoCount={photoCount}
+        citiesVisited={citiesVisited}
+        statesVisited={statesVisited}
       />
     </div>
   );

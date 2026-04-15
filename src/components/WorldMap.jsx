@@ -3,25 +3,10 @@ import maplibregl from "maplibre-gl";
 import { MAP_STYLE, MAP_PROJECTION } from "../trip.config.js";
 
 // ── Projection ────────────────────────────────────────────────────────────────
-const WORLD = { lngMin: -180, lngMax: 180,  latMin: -58, latMax: 80 };
-const NA    = { lngMin: -173, lngMax:  -26, latMin:  22, latMax: 73 };
-const CA    = { lngMin: -134, lngMax: -108, latMin:  32, latMax: 44 };
-const US    = { lngMin: -125, lngMax:  -66, latMin:  24, latMax: 50 };
-// On mobile (portrait), the wide US box zooms out too far; bias toward Chicago
-const US_MOBILE = { lngMin: -116, lngMax: -76, latMin: 29, latMax: 47 };
+const WORLD = { lngMin: -180, lngMax: 180, latMin: -58, latMax: 80 };
 
-function defaultUSBounds() { return window.innerWidth < 600 ? US_MOBILE : US; }
-
-function isCalifornia(lat, lng)   { return lat >= 32 && lat <= 42 && lng >= -125 && lng <= -114; }
-function isNorthAmerica(lat, lng) { return lat >= 22 && lat <= 73 && lng >= -170 && lng <= -50; }
 function targetBoundsFor(pts) {
-  if (!pts || pts.length === 0) return WORLD;
-  if (pts.length === 1) {
-    const { lat, lng } = pts[0];
-    if (isCalifornia(lat, lng))   return CA;
-    if (isNorthAmerica(lat, lng)) return NA;
-    return WORLD;
-  }
+  if (!pts || pts.length <= 1) return WORLD;
   const lats = pts.map(p => p.lat);
   const lngs = pts.map(p => p.lng);
   const latMin = Math.min(...lats), latMax = Math.max(...lats);
@@ -147,7 +132,7 @@ export default function WorldMap({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: MAP_STYLE,
-      center: [-96, 38],
+      center: [0, 20],
       zoom: 0,
       minZoom: 2,
       attributionControl: false,
@@ -169,45 +154,6 @@ export default function WorldMap({
         .filter(l => l.id.startsWith("poi"))
         .forEach(l => map.setLayoutProperty(l.id, "visibility", "none"));
 
-      // Recolor yellow roads to minimalist gray/white
-      const roadColors = {
-        "highway-motorway-link":      "#d0d0d0",
-        "highway-secondary-tertiary": "#e0e0e0",
-        "highway-primary":            "#d8d8d8",
-        "highway-trunk":              "#d8d8d8",
-        "highway-motorway":           "#d0d0d0",
-        "bridge-motorway-link":       "#d0d0d0",
-        "bridge-link":                "#e0e0e0",
-        "bridge-secondary-tertiary":  "#e0e0e0",
-        "bridge-trunk-primary":       "#d8d8d8",
-        "bridge-motorway":            "#d0d0d0",
-        "tunnel-link":                "#e8e8e8",
-        "tunnel-secondary-tertiary":  "#e8e8e8",
-        "tunnel-trunk-primary":       "#e0e0e0",
-        "tunnel-motorway":            "#d8d8d8",
-      };
-      for (const [id, color] of Object.entries(roadColors)) {
-        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", color);
-      }
-
-      // Recolor yellow road casings (outlines) to gray
-      const casingColor = "#c8c8c8";
-      const casingLayers = [
-        "tunnel-motorway-link-casing", "tunnel-link-casing",
-        "tunnel-secondary-tertiary-casing", "tunnel-trunk-primary-casing",
-        "tunnel-motorway-casing", "highway-motorway-link-casing",
-        "highway-link-casing", "highway-secondary-tertiary-casing",
-        "highway-primary-casing", "highway-trunk-casing",
-        "highway-motorway-casing", "bridge-motorway-link-casing",
-        "bridge-link-casing", "bridge-secondary-tertiary-casing",
-        "bridge-trunk-primary-casing", "bridge-motorway-casing",
-      ];
-      for (const id of casingLayers) {
-        if (map.getLayer(id)) map.setPaintProperty(id, "line-color", casingColor);
-      }
-
-
-
       addRouteLayer(map, allRoutesRef.current);
 
       // Reveal the map now that globe projection is fully active
@@ -224,13 +170,11 @@ export default function WorldMap({
       }
 
       // Fly from globe view down to the route
-      const target = noZoomRef.current ? defaultUSBounds() : targetBoundsFor(coordsPtsRef.current);
-      setTimeout(() => {
-        map.fitBounds(
-          [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
-          { animate: true, duration: 2000 }
-        );
-      }, 600);
+      const target = noZoomRef.current ? WORLD : targetBoundsFor(coordsPtsRef.current);
+      map.fitBounds(
+        [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
+        { animate: true, duration: 2000 }
+      );
     });
 
     map.on("move", () => emitBoundsChange(map, onBoundsChangeRef.current));
@@ -257,7 +201,7 @@ export default function WorldMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const target = noZoom ? defaultUSBounds() : targetBoundsFor(coordsPts);
+    const target = noZoom ? WORLD : targetBoundsFor(coordsPts);
     const fit = () => map.fitBounds(
       [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
       { animate: true, duration: 500, easing: easeInOut }
@@ -297,7 +241,7 @@ export default function WorldMap({
       } else if (highlightRoute && highlightRoute.length === 1) {
         map.easeTo({ center: [highlightRoute[0].lng, highlightRoute[0].lat], zoom: 8, duration: 600 });
       } else if (!highlightRoute) {
-        const target = noZoomRef.current ? defaultUSBounds() : targetBoundsFor(coordsPtsRef.current);
+        const target = noZoomRef.current ? WORLD : targetBoundsFor(coordsPtsRef.current);
         map.fitBounds(
           [[target.lngMin, target.latMin], [target.lngMax, target.latMax]],
           { animate: true, duration: 600, easing: easeInOut }
@@ -308,7 +252,7 @@ export default function WorldMap({
     // In practice the user clicks long after load, so the first branch always runs.
     if (map.getSource("route-highlight")) {
       apply();
-    } else {
+    } else if (highlightRoute) {
       map.once("load", apply);
     }
   }, [highlightRoute]); // eslint-disable-line react-hooks/exhaustive-deps

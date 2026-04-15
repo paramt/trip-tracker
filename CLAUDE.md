@@ -110,6 +110,8 @@ This means selecting a day highlights the segment traveled during that day. Sing
 
 `WorldMap` accepts a `highlightRoute` prop and maintains a `route-highlight` GeoJSON source + line layer (yellow, 5px, opacity 0.9) added in `addRouteLayer` alongside the base `route` layer. The highlight effect uses a direct `map.getSource("route-highlight")` existence check rather than `map.isStyleLoaded()` — the latter can spuriously return `false` while tiles are loading, silently dropping the update.
 
+The `highlightRoute` effect's fallback `map.once("load", apply)` must only be registered when `highlightRoute` is non-null. If registered with `highlightRoute = null`, it fires on map load and calls `fitBounds` with a hardcoded 600ms duration, overriding the intended initial zoom animation in the main `load` handler's `setTimeout`.
+
 ## Road-snapped routing
 
 The route follows actual roads via **OpenRouteService (ORS)**. Routing happens in `update-route.js`, not in the browser. Requires `ORS_API_KEY` env var (or GitHub Actions secret).

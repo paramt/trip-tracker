@@ -156,7 +156,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
         <div className="sidebar-footer-links">
           <a href="https://param.me" target="_blank" rel="noopener noreferrer" className="sidebar-desc">param.me</a>
           <a
-            href="https://github.com/paramt/route-66"
+            href="https://github.com/paramt/trip-tracker"
             target="_blank"
             rel="noopener noreferrer"
             className="sidebar-github-link"
@@ -327,11 +327,10 @@ export default function App() {
         ) : (
           <>
             <WorldMap
-              coords={null}
+              coords={allCoords}
               allCoords={allCoords}
               allRoutes={globalRoute}
               highlightRoute={highlightRoute}
-              noZoom={true}
               onMarkerHover={photo => setHoveredPhoto(photo)}
               onMarkerLeave={() => setHoveredPhoto(null)}
               onMarkerClick={photo => setExpandedPhoto(prev => prev === photo ? null : photo)}

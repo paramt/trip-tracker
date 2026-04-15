@@ -1,8 +1,8 @@
-# Route 66 Road Trip Map
+# Trip Tracker
 
-> A live tracker for my road trip from Toronto to SF via Route 66
+> An interactive map tracker for road trips, built on GPS-tagged photos
 
-Syncs with photos from my phone to generate an interactive map with polaroid popups, an interpolated route, a day-by-day timeline, and live trip status. [Copy this for your own trips!](#set-up-for-your-own-trip)
+Drop in your photos and get an interactive map with polaroid popups, an interpolated route, a day-by-day timeline, and live trip status. [Set it up for your own trip!](#set-up-for-your-own-trip)
 
 
 ![Screenshot of the map](screenshot.png)
@@ -12,29 +12,25 @@ Built with React + MapLibre GL JS + OpenFreeMap tiles
 
 ## Set up for your own trip
 
-### 1. Fork the repo
+### 1. Use this template
 
-[Fork this repo](https://github.com/paramt/route-66/fork) on GitHub.
+Click **Use this template → Create a new repository** on GitHub.
 
 ### 2. Enable GitHub Pages
 
 Go to your repo's **Settings → Pages** and set the source to **GitHub Actions**.
 
-### 3. Enable Actions
-
-GitHub Actions runs the scripts to extract photo metadata and generate the route between photos. 
-
-### 4. Add your OpenRouteService API key
+### 3. Add your OpenRouteService API key
 
 Sign up for a free key at [openrouteservice.org](https://openrouteservice.org/), then add it as a repository secret named `ORS_API_KEY` under **Settings → Secrets and variables → Actions → New repository secret**.
 
 This is used to snap your route to actual roads. Without it, the map falls back to straight lines between photos.
 
-### 5. Update `src/trip.config.js`
+### 4. Update `src/trip.config.js`
 
 Optional, modify these to edit trip metadata as well as to personalize the look and feel of the tracker 
 
-### 6. Add your photos and push
+### 5. Add your photos and push
 
 Drop GPS-tagged photos (JPG, HEIC, or PNG) into `public/photos/` and push to `main`. Any photo taken on a modern iPhone or Android with location enabled will have GPS data.
 

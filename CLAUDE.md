@@ -1,4 +1,4 @@
-# Route 66 — Project Notes
+# Trip Tracker — Project Notes
 
 ## What this is
 React + Vite app that visualizes a road trip on a map. Drop photos into `public/photos/`, run `npm run process` to extract metadata and generate thumbnails, then run `npm run update-route` to fetch a road-snapped route. Every GPS-tagged photo is plotted on the map with the route connecting them.

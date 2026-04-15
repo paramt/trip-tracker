@@ -8,3 +8,8 @@ make this modular:
 - terry fox for demo 
 
 - make this a template repo, change github links, post this repo 
+
+
+- hyperlink the template step in readme
+
+- modify title / text

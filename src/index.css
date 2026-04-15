@@ -215,6 +215,25 @@ code {
   color: #f0ede8;
 }
 
+.sidebar-links {
+  list-style: none;
+  padding: 0;
+  margin: -8px 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-links a {
+  font-size: 12px;
+  color: #888;
+  text-decoration: none;
+}
+
+.sidebar-links a:hover {
+  color: #bbb;
+}
+
 .sidebar-footer {
   width: 300px;
   flex-shrink: 0;

@@ -4,7 +4,7 @@ import WorldMap from './components/WorldMap';
 import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
-import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, PAGE_TITLE, TRIP_DISTANCE_KM } from './trip.config.js';
+import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, TRIP_LINKS, PAGE_TITLE, TRIP_DISTANCE_KM } from './trip.config.js';
 
 document.title = PAGE_TITLE;
 
@@ -89,17 +89,26 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
           <p className="sidebar-desc">
             {TRIP_DESCRIPTION}
           </p>
-          <ul className="trip-legs">
-            {TRIP_LEGS.map(leg => (
-              <li key={leg.label} className="trip-leg">
-                <span className="trip-leg-icon">{leg.icon}</span>
-                <div>
-                  <div className="trip-leg-label">{leg.label}</div>
-                  <div className="trip-leg-note">{leg.note}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {TRIP_LINKS?.length > 0 && (
+            <ul className="sidebar-links">
+              {TRIP_LINKS.map(link => (
+                <li key={link.url}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>
+              ))}
+            </ul>
+          )}
+          {TRIP_LEGS.length > 0 && (
+            <ul className="trip-legs">
+              {TRIP_LEGS.map(leg => (
+                <li key={leg.label} className="trip-leg">
+                  <span className="trip-leg-icon">{leg.icon}</span>
+                  <div>
+                    <div className="trip-leg-label">{leg.label}</div>
+                    <div className="trip-leg-note">{leg.note}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {distanceKm && (
@@ -322,7 +331,7 @@ export default function App() {
       <div className="map-full" onMouseLeave={() => setHoveredPhoto(null)}>
         {rawPhotos.length === 0 ? (
           <div className="empty-state">
-            <p>Drop photos into <code>public/dump/</code> and run <code>npm run process</code> to get started.</p>
+            <p>Drop photos into <code>public/photos/</code> and run <code>npm run process</code> to get started.</p>
           </div>
         ) : (
           <>

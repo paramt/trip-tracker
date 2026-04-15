@@ -22,7 +22,7 @@ const THUMB_QUALITY = 70;
 async function reverseGeocode(lat, lng) {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'route-66-photo-map/1.0' } });
+    const res = await fetch(url, { headers: { 'User-Agent': 'trip-tracker-photo-map/1.0' } });
     const data = await res.json();
     const addr = data.address ?? {};
     const city = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.suburb ?? addr.neighbourhood ?? addr.county ?? null;

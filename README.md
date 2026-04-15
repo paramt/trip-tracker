@@ -20,20 +20,21 @@ Built with React + MapLibre GL JS + OpenFreeMap tiles
 
 Go to your repo's **Settings → Pages** and set the source to **GitHub Actions**.
 
-### 3. Add your OpenRouteService API key
+### 3. Enable Actions
 
-Sign up for a free key at [openrouteservice.org](https://openrouteservice.org/), then add it as a repository secret named `ORS_API_KEY` under **Settings → Secrets → Actions**.
+GitHub Actions runs the scripts to extract photo metadata and generate the route between photos. 
+
+### 4. Add your OpenRouteService API key
+
+Sign up for a free key at [openrouteservice.org](https://openrouteservice.org/), then add it as a repository secret named `ORS_API_KEY` under **Settings → Secrets and variables → Actions → New repository secret**.
 
 This is used to snap your route to actual roads. Without it, the map falls back to straight lines between photos.
 
-### 4. Update trip metadata
+### 5. Update `src/trip.config.js`
 
-Edit `src/trip.config.js`:
+Optional, modify these to edit trip metadata as well as to personalize the look and feel of the tracker 
 
-- `TRIP_START` / `TRIP_END` — your trip dates (drives the live/upcoming/ended badge)
-- `TRIP_LEGS` — the named legs shown in the sidebar
-
-### 5. Add your photos and push
+### 6. Add your photos and push
 
 Drop GPS-tagged photos (JPG, HEIC, or PNG) into `public/photos/` and push to `main`. Any photo taken on a modern iPhone or Android with location enabled will have GPS data.
 
@@ -50,14 +51,14 @@ npm install
 npm run dev
 ```
 
-To process photos locally (useful for previewing before pushing):
+**To process photos locally** (useful for previewing before pushing):
+
+Create `.env` at the root of the repo and add `ORS_API_KEY=your_key`.
 
 ```bash
-npm run process          # extract EXIF, generate thumbnails → src/data/photos.json
-ORS_API_KEY=... npm run update-route  # fetch road-snapped route → src/data/route.json
+npm run process       # extract EXIF, generate thumbnails → src/data/photos.json
+npm run update-route  # fetch road-snapped route from ORS → src/data/route.json
 ```
-
-Or put `ORS_API_KEY=your_key` in a `.env` file and run `npm run update-route` directly.
 
 ---
 

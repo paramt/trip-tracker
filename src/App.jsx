@@ -115,14 +115,14 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
           <section className="sidebar-section">
             <h2 className="sidebar-section-title">Trip Stats</h2>
             <div className="trip-stats">
-              <div className="trip-stat">
+              {/* <div className="trip-stat">
                 <div className="trip-stat-value">{tripTime ?? '—'}</div>
                 <div className="trip-stat-label">Trip Time</div>
               </div>
               <div className="trip-stat">
                 <div className="trip-stat-value">{photoCount}</div>
                 <div className="trip-stat-label">Photos</div>
-              </div>
+              </div> */}
               <div className="trip-stat">
                 <div className="trip-stat-value">{statesVisited || '—'}</div>
                 <div className="trip-stat-label">States / Provinces</div>

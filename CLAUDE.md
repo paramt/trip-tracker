@@ -137,12 +137,31 @@ The route follows actual roads via **OpenRouteService (ORS)**. Routing happens i
 ### Fallback
 If ORS fails after all retries (including a missing API key), `update-route.js` exits with code 1 and leaves the existing `route.json` untouched. `App.jsx` still falls back to straight lines when `route.json` is missing coordinates or contains an empty array.
 
+### Why update-route runs in both deploy.yml and update-route.yml
+`deploy.yml` runs `npm run update-route || true` (soft failure — deploy continues even if ORS is down). `update-route.yml` runs the same command hourly without `|| true` (hard failure — visible in Actions if ORS is consistently broken). The hourly cron exists specifically to retry after a failed push-deploy: if ORS was flaky when you pushed, the route catches up within the hour without needing another push.
+
 Because `distanceMeters` and `coordinates` are always written together, the Distance Covered stat and the map route stay consistent:
 - **ORS never succeeded**: `distanceMeters` is absent → stats section hidden, map shows straight lines.
 - **ORS previously succeeded, fails on re-run**: `route.json` is untouched → map shows the old road-snapped route and `distanceMeters` reflects that same fetch. Both are stale but consistent. The only edge case is when new photos were added between the last good fetch and the failure — the map shows straight lines for new waypoints while the stat still shows the previous distance.
 
 ### ORS 6,000 km per-request limit
 ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`error 2004`). The limit applies per batch (40 waypoints), not to the total trip, so trips longer than 6,000 km are fine as long as no 40 consecutive waypoints span more than that. In practice this is never an issue at normal photo density. It does bite with test data that mixes geographically distant trips — e.g. California photos from 2025 mixed with Ontario/New York photos from 2026 — which creates a chronologically-sorted route that zig-zags cross-continent within a single batch.
+
+## Google Drive photo sync
+
+`scripts/sync-drive.js` + `.github/workflows/sync-drive.yml` provide an optional alternative to committing photos directly.
+
+### How it works
+`sync-drive.yml` runs hourly (only when `GOOGLE_DRIVE_FOLDER_ID` repo variable is set). It downloads new/changed images from the Drive folder to `public/photos/`, removes local files deleted from Drive, then commits and pushes — without `[skip ci]`. That push triggers `deploy.yml`, which runs the normal process → route → build → deploy pipeline. No special-casing anywhere else.
+
+### Why no [skip ci] on the sync commit
+The sync commit is intentionally a real push so that `deploy.yml` picks it up. `deploy.yml` is the single source of truth for processing and deployment — Drive mode just feeds it photos via git rather than via a human push.
+
+### Auth
+Service account JSON stored as `GOOGLE_SERVICE_ACCOUNT_JSON` secret. The Drive folder is shared with the service account email (Viewer). `GOOGLE_DRIVE_FOLDER_ID` is a repo variable (not secret — it's just an ID from the folder URL).
+
+### Deletion handling
+Drive is the source of truth. Files removed from the Drive folder are deleted from `public/photos/` on the next sync. When a `.heic` is removed, the auto-generated `.jpg` sibling (created by `process.js`) is also removed. Auto-generated `.thumb.webp` files are never touched by the sync script — `process.js` manages those.
 
 ## HEIC support — what didn't work, what did
 

@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "process": "node --env-file-if-exists=.env scripts/process.js",
-    "update-route": "node --env-file-if-exists=.env scripts/update-route.js"
+    "update-route": "node --env-file-if-exists=.env scripts/update-route.js",
+    "sync-drive": "node --env-file-if-exists=.env scripts/sync-drive.js"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "^5.2.8",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "exifr": "^7.1.3",
+    "googleapis": "^144.0.0",
     "sharp": "^0.33.5",
     "vite": "^8.0.4"
   }

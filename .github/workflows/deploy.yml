@@ -21,6 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pull latest commits
+        run: git pull
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

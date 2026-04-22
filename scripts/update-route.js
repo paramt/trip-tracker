@@ -86,7 +86,12 @@ async function main() {
   const gpsWaypoints = photos.filter(p => p.lat != null && p.lng != null);
 
   if (gpsWaypoints.length < 2) {
-    console.log('Not enough GPS photos to route.');
+    if (existsSync(ROUTE_FILE)) {
+      await writeFile(ROUTE_FILE, JSON.stringify({ coordinates: [] }, null, 2));
+      console.log('Not enough GPS photos to route — cleared existing route.json.');
+    } else {
+      console.log('Not enough GPS photos to route.');
+    }
     return;
   }
 

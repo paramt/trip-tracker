@@ -1,5 +1,10 @@
 // Trip configuration — edit this file to customize for your own trip
 
+// The base path where your site is served.
+//   GitHub Pages project site: '/your-repo-name/'
+//   Custom domain at root:     '/'
+export const BASE_PATH = '/trip-tracker/';
+
 export const TRIP_TITLE       = 'Trip Tracker - Title';
 export const TRIP_DESCRIPTION = 'Description';
 export const PAGE_TITLE       = 'Trip Tracker';

@@ -28,7 +28,7 @@ This is used to snap your route to actual roads. Without it, the map falls back 
 
 ### 4. Update `src/trip.config.js`
 
-Optional, modify these to edit trip metadata as well as to personalize the look and feel of the tracker 
+Set `BASE_PATH` to where your site is served — `'/your-repo-name/'` for a GitHub Pages project site, or `'/'` for a custom domain at the root. Everything else is optional: trip dates, title, map style, sidebar links.
 
 ### 5. Add your photos
 
@@ -42,9 +42,10 @@ GitHub Actions handles the rest automatically: it extracts EXIF metadata, genera
 
 If you'd rather upload photos to a Google Drive folder than commit them to the repo, you can connect the tracker to a Drive folder. An hourly cron will pull new photos, process them, and redeploy automatically.
 
-1. Create a [GCP service account](https://console.cloud.google.com/iam-admin/serviceaccounts), enable the **Google Drive API**, and download a JSON key for the account.
-2. Share your Drive folder with the service account's email address (Viewer access is enough).
-3. Add two more entries under **Settings → Secrets and variables → Actions**:
+1. Create a [GCP service account](https://console.cloud.google.com/iam-admin/serviceaccounts) and download a JSON key for the account.
+2. Enable the [Google Drive API](https://console.cloud.google.com/apis/api/drive.googleapis.com) for the same GCP project.
+3. Share your Drive folder with the service account's email address (Viewer access is enough). No IAM roles are needed — Drive access is controlled by folder sharing, not GCP permissions.
+4. Add two more entries under **Settings → Secrets and variables → Actions**:
    - Secret `GOOGLE_SERVICE_ACCOUNT_JSON` → paste the full contents of the JSON key file
    - Variable (not secret) `GOOGLE_DRIVE_FOLDER_ID` → the folder ID from its URL (`drive.google.com/drive/folders/<ID>`)
 

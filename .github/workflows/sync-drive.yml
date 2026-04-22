@@ -34,3 +34,12 @@ jobs:
           git add public/photos/
           git diff --staged --quiet || git commit -m "sync photos from google drive"
           git push
+
+  deploy:
+    needs: sync
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    permissions:
+      contents: write
+      pages: write
+      id-token: write

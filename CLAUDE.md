@@ -154,8 +154,8 @@ ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`e
 ### How it works
 `sync-drive.yml` runs hourly (only when `GOOGLE_DRIVE_FOLDER_ID` repo variable is set). It downloads new/changed images from the Drive folder to `public/photos/`, removes local files deleted from Drive, then commits and pushes — without `[skip ci]`. That push triggers `deploy.yml`, which runs the normal process → route → build → deploy pipeline. No special-casing anywhere else.
 
-### Why no [skip ci] on the sync commit
-The sync commit is intentionally a real push so that `deploy.yml` picks it up. `deploy.yml` is the single source of truth for processing and deployment — Drive mode just feeds it photos via git rather than via a human push.
+### How deploy is triggered after sync
+`sync-drive.yml` calls `deploy.yml` directly via `workflow_call` (a `deploy` job with `needs: sync`). This is necessary because GitHub Actions does not trigger workflows on pushes made by `GITHUB_TOKEN` — so a `git push` from the sync job would never fire `deploy.yml`'s `on: push` trigger. `deploy.yml` is the single source of truth for processing and deployment; `workflow_call` lets sync invoke it explicitly after committing photos.
 
 ### Auth
 Service account JSON stored as `GOOGLE_SERVICE_ACCOUNT_JSON` secret. The Drive folder is shared with the service account email (Viewer). `GOOGLE_DRIVE_FOLDER_ID` is a repo variable (not secret — it's just an ID from the folder URL).

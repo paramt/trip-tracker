@@ -164,7 +164,7 @@ ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`e
 Service account JSON stored as `GOOGLE_SERVICE_ACCOUNT_JSON` secret. The Drive folder is shared with the service account email (Viewer). `GOOGLE_DRIVE_FOLDER_ID` is a repo variable (not secret — it's just an ID from the folder URL).
 
 ### Deletion handling
-Drive is the source of truth. Files removed from the Drive folder are deleted from `public/photos/` on the next sync. When a `.heic` is removed, the auto-generated `.jpg` sibling (created by `process.js`) is also removed. Auto-generated `.thumb.webp` files are never touched by the sync script — `process.js` manages those.
+Drive is the source of truth. Files removed from the Drive folder are deleted from `public/photos/` on the next sync, along with their `.thumb.webp`. HEIC files are stored locally as `<name>.jpg` (see "HEIC from Google Drive"), so the local name is matched against that.
 
 ## HEIC support — what didn't work, what did
 

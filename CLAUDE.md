@@ -14,7 +14,7 @@ Automated workflows frequently push commits to `main` (photo processing, thumbna
 
 ## Architecture
 - **Map UI**: `WorldMap.jsx` (MapLibre GL JS), `Polaroid.jsx`, `Tack.jsx`. `App.jsx` drives everything from `photos.json` and `route.json`.
-- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `width`, `height`, `location`). `route.json` stores `{ waypointHash, distanceMeters, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `update-route.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty or missing).
+- **Data flow**: `photos.json` is a flat array of photo objects (`file`, `thumb`, `lat`, `lng`, `datetime`, `localDatetime`, `width`, `height`, `location`) — see "Photo timestamps" below. `route.json` stores `{ waypointHash, distanceMeters, coordinates: [[lng, lat], ...] }` — the road-snapped route pre-computed by `update-route.js`. `App.jsx` filters to GPS-tagged photos, sorts chronologically, plots one marker per photo, and loads the route from `route.json` (falls back to straight lines if empty or missing).
 - **Image serving**: Photos live in `public/photos/` and are served by Vite as static assets at `/photos/...`. Thumbnails are WebP format (`.thumb.webp`).
 
 ## Map rendering — MapLibre GL JS
@@ -67,7 +67,8 @@ Clicking a marker opens a full-screen overlay (`polaroid-overlay`) with the phot
 
 - **Thumbnail-only popup**: The small hover popup passes `src={photo.thumb}` with no `thumb` prop — this prevents the full image from ever being fetched for the preview. The `thumb` prop on `<Polaroid>` is only for progressive loading (thumb → full crossfade), so omitting it when `src` is already the thumb avoids loading the full image unnecessarily.
 - **Stable rotation angle**: `_rotate` is computed once at module level (in the `gpsPhotos.map()`) and passed as the `rotate` prop to both the hover popup and the expanded Polaroid. Without this, `Polaroid` picks a new random angle on each mount, so the popup and expanded views would tilt differently.
-- **Overlay dismissal**: The backdrop `onClick` closes the overlay; `e.stopPropagation()` on the inner `div.polaroid-expanded` prevents clicks on the photo itself from bubbling up to the backdrop handler.
+- **Prev/next navigation**: arrow buttons on either side of the photo (moved to the bottom on mobile) and ←/→ keys step through `gpsPhotos`; Escape closes. The overlay gets focus on open. `key={expandedPhoto.file}` on `.polaroid-expanded` replays the expand animation for each photo.
+- **Overlay dismissal**: The backdrop `onClick` closes the overlay; `e.stopPropagation()` on the inner `div.polaroid-overlay-inner` (photo + nav buttons) prevents those clicks from bubbling up to the backdrop handler.
 - **No hover popup while expanded**: `{activePhoto && popupPos && !expandedPhoto && ...}` hides the hover popup when the overlay is open.
 - **Width override**: `.polaroid-expanded .polaroid { width: min(480px, 85vw, calc((90vh - 80px) * var(--photo-aspect, 1.5))) }` overrides the fixed `260px` set on `.polaroid` and also constrains portrait images by viewport height. Put this after the base `.polaroid` rule so specificity works.
 - **Spring animation**: `cubic-bezier(0.34, 1.4, 0.64, 1)` gives the polaroid a slight overshoot for a snappy feel. The `@keyframes polaroidExpand` scales from `0.25` to `1` — keep `transform: scale(1)` in the `to` frame, not `transform: none`, or it may conflict with the rotation applied via `--polaroid-rotate`.
@@ -94,7 +95,9 @@ The stats section only renders when `distanceKm` is non-null (i.e. `route.json` 
 
 ### Day-by-day timeline
 
-`dayGroups` is computed at module level by grouping `gpsPhotos` (already sorted chronologically) by `datetime.slice(0, 10)`. Each group stores `firstPhotoIdx` — the index of its first photo in `gpsPhotos`.
+`dayGroups` is computed at module level by grouping `gpsPhotos` (already sorted chronologically) by `getTripDayKey(photo)`: the date of `localDatetime`, except photos taken before `DAY_START_HOUR` (from `trip.config.js`, default 4) count toward the previous day. Each group stores `firstPhotoIdx` — the index of its first photo in `gpsPhotos`.
+
+`dayDistances` gives km driven per day (shown in each timeline row), measured along the route between the same route indices `highlightForDay` uses (`dayRouteRange`).
 
 Clicking a day calls `setSelectedDay(i)`, which recomputes `highlightRoute` via `useMemo(() => highlightForDay(selectedDay), [selectedDay])`.
 
@@ -161,7 +164,7 @@ ORS free tier rejects any route whose approximated distance exceeds 6,000 km (`e
 Service account JSON stored as `GOOGLE_SERVICE_ACCOUNT_JSON` secret. The Drive folder is shared with the service account email (Viewer). `GOOGLE_DRIVE_FOLDER_ID` is a repo variable (not secret — it's just an ID from the folder URL).
 
 ### Deletion handling
-Drive is the source of truth. Files removed from the Drive folder are deleted from `public/photos/` on the next sync. When a `.heic` is removed, the auto-generated `.jpg` sibling (created by `process.js`) is also removed. Auto-generated `.thumb.webp` files are never touched by the sync script — `process.js` manages those.
+Drive is the source of truth. Files removed from the Drive folder are deleted from `public/photos/` on the next sync, along with their `.thumb.webp`. HEIC files are stored locally as `<name>.jpg` (see "HEIC from Google Drive"), so the local name is matched against that.
 
 ## HEIC support — what didn't work, what did
 
@@ -191,13 +194,24 @@ const exif = await exifr.parse(buf.slice(tiffOff), { gps: true, exif: true });
 ```
 
 ### Fallback: file mtime for missing datetime
-If EXIF datetime extraction still fails, fall back to `fs.stat().mtime`. iPhone sets the file modification time to the capture time, so this is usually accurate.
+If EXIF has no datetime and the cache has none either, fall back to `fs.stat().mtime` (treated as UTC). iPhone sets the file modification time to the capture time, so this is usually accurate for local runs. In CI, mtime is checkout time, which is why the cache is consulted first.
 
 ### Auto-generated JPGs must be excluded from processing
 When `process.js` converts `IMG_0845.heic` → `IMG_0845.jpg`, both files end up in `public/photos/`. On re-run, the script would pick up the generated `.jpg` as a new image to process (creating a duplicate entry). Fix: skip any `.jpg`/`.jpeg` file that has a same-name `.heic` sibling in the directory.
 
 ### Metadata cache for CI
-`process.js` loads the existing `photos.json` as a cache keyed by filename. If a photo's metadata is already present (has GPS or a confirmed datetime), EXIF extraction is skipped — it reads from the cache instead. This lets CI re-run `process.js` even when the original HEIC files aren't committed, as long as `photos.json` is committed. Reverse geocode results are also cached this way to avoid redundant Nominatim API calls.
+`process.js` loads the existing `photos.json` as a cache keyed by filename. Every photo is still re-processed (so thumbnails pick up orientation fixes), but GPS and times from the cache fill in anything EXIF can't supply. Reverse geocode results are also cached this way to avoid redundant Nominatim API calls. `normalizeCached` migrates older entries whose `datetime` was camera-local time with no `Z`.
+
+### HEIC from Google Drive
+`sync-drive.js` converts HEIC → JPG at download time (the local file is `<name>.jpg`). `heic-convert` strips metadata, so `injectExif` copies the raw TIFF/EXIF block from the HEIC into the JPG as an APP1 segment, and `resetOrientation` sets the Orientation tag to 1 — `heic-convert` already rotates the pixels, so keeping the original tag rotates the photo twice. When a Drive file is removed, its local file and `.thumb.webp` are deleted.
+
+## Photo timestamps
+
+Each photo has two times:
+- `datetime` — the true UTC instant (`"...Z"`), used for ordering and Trip Time. From the GPS timestamp (`GPSDateStamp` + `GPSTimeStamp`) when present, else `DateTimeOriginal` corrected by `OffsetTimeOriginal`.
+- `localDatetime` — camera wall-clock time (`"YYYY-MM-DDTHH:MM:SS"`, no zone) from `DateTimeOriginal`. Used for the polaroid date and timeline day grouping, so they show the date where the photo was taken, not in the viewer's time zone.
+
+`DateTimeOriginal` alone has no time zone, so sorting by it breaks when a trip crosses zones. When one of the two is missing, `fillMissingTimes` borrows the UTC offset of the nearest photo (in time) that has both, falling back to `round(lng / 15)` hours. After `process.js`, every `datetime` ends in `Z`, so `App.jsx` can sort with a plain string compare.
 
 
 ### CSS filter gotcha — ICC color profiles

@@ -746,6 +746,7 @@ code {
   justify-content: center;
   z-index: 1000;
   animation: overlayFadeIn 0.25s ease forwards;
+  outline: none;
 }
 
 @keyframes overlayFadeIn {
@@ -769,6 +770,55 @@ code {
 
 .polaroid-overlay-close:hover {
   color: #fff;
+}
+
+.polaroid-overlay-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.polaroid-nav {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  backdrop-filter: blur(4px);
+}
+
+.polaroid-nav:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.polaroid-nav:disabled {
+  opacity: 0.2;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .polaroid-overlay {
+    padding-bottom: 96px;
+  }
+  .polaroid-overlay-inner {
+    flex-direction: column;
+  }
+  .polaroid-nav {
+    position: fixed;
+    bottom: 28px;
+  }
+  .polaroid-nav-prev { left: calc(50vw - 56px); }
+  .polaroid-nav-next { left: calc(50vw + 8px); }
 }
 
 .polaroid-expanded {

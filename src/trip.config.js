@@ -13,6 +13,11 @@ export const TRIP_START         = new Date('1980-04-12T12:00:00Z'); // Apr 12 19
 export const TRIP_END           = new Date('1980-09-01T12:00:00Z'); // Sep 1 1980 — forced to stop near Thunder Bay, ON
 export const TRIP_DISTANCE_KM   = 5373; // total distance covered
 
+// Hour (camera-local time) at which a new trip day starts in the timeline. Photos taken
+// between midnight and this hour count toward the previous day. Set to 0 for plain
+// calendar days.
+export const DAY_START_HOUR = 4;
+
 // Optional: break the trip into named legs shown as a list in the sidebar
 export const TRIP_LEGS = [
   { icon: '🚗', label: 'Leg 1', note: 'City A → City B' },

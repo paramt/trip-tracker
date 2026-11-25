@@ -71,7 +71,11 @@ async function processImage(file) {
   const thumbName = `${base}.thumb.webp`;
   const thumbPath = path.join(DUMP_DIR, thumbName);
 
-  let lat = null, lng = null, datetime = null, width = null, height = null;
+  // datetime:      true UTC instant ("...Z"), used for ordering. Null if EXIF has no
+  //                UTC info — main() estimates it from neighbouring photos.
+  // localDatetime: camera wall-clock time ("YYYY-MM-DDTHH:MM:SS", no zone), used for
+  //                display and for grouping photos into trip days.
+  let lat = null, lng = null, datetime = null, localDatetime = null, width = null, height = null;
 
   // Extract EXIF from the original file
   try {
@@ -101,20 +105,9 @@ async function processImage(file) {
     if (exif) {
       lat = exif.latitude ?? null;
       lng = exif.longitude ?? null;
-      const dt = exif.DateTimeOriginal ?? exif.CreateDate ?? null;
-      if (dt instanceof Date) {
-        datetime = dt.toISOString().replace('Z', '');
-      }
+      ({ datetime, localDatetime } = exifTimes(exif));
     }
   } catch {}
-
-  // Last resort: use file modification time as datetime
-  if (!datetime) {
-    try {
-      const s = await stat(filePath);
-      datetime = s.mtime.toISOString().replace('Z', '').replace(/\.\d+$/, '');
-    } catch {}
-  }
 
   // Get dimensions and generate thumbnail from the serve path (sharp auto-rotates via .rotate())
   try {
@@ -138,9 +131,101 @@ async function processImage(file) {
     lat,
     lng,
     datetime,
+    localDatetime,
     width,
     height,
   };
+}
+
+const pad2 = n => String(Math.floor(n)).padStart(2, '0');
+const isoSeconds = d => d.toISOString().slice(0, 19); // "YYYY-MM-DDTHH:MM:SS"
+
+// Derive { datetime (UTC, "...Z"), localDatetime (camera wall clock) } from parsed EXIF.
+function exifTimes(exif) {
+  let datetime = null, localDatetime = null;
+
+  // DateTimeOriginal is camera-local time with no zone. exifr returns it as a Date that
+  // treats the local value as UTC, so its ISO string is the camera's wall-clock time.
+  const dtOriginal = exif.DateTimeOriginal ?? exif.CreateDate ?? null;
+  if (dtOriginal instanceof Date && !isNaN(dtOriginal)) localDatetime = isoSeconds(dtOriginal);
+
+  // Prefer the GPS timestamp: true UTC from the GPS receiver, so ordering stays correct
+  // across time zone boundaries.
+  const gpsDate = exif.GPSDateStamp ?? exif.GPSDate ?? null;
+  const gpsTime = exif.GPSTimeStamp ?? null;
+  if (gpsDate && gpsTime) {
+    const isoDate = (typeof gpsDate === 'string' ? gpsDate : new Date(gpsDate).toISOString())
+      .replace(/:/g, '-').slice(0, 10);
+    let timeStr;
+    if (typeof gpsTime === 'string') {
+      const [h, m, sec] = gpsTime.split(':');
+      timeStr = `${pad2(h)}:${pad2(m)}:${pad2(parseFloat(sec))}`;
+    } else if (Array.isArray(gpsTime)) {
+      timeStr = gpsTime.map(pad2).join(':');
+    }
+    if (timeStr && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) datetime = `${isoDate}T${timeStr}Z`;
+  }
+
+  // Otherwise, OffsetTimeOriginal (if present) converts the local time to real UTC.
+  if (!datetime && localDatetime) {
+    const match = (exif.OffsetTimeOriginal ?? exif.OffsetTime ?? '').match?.(/([+-])(\d{2}):(\d{2})/);
+    if (match) {
+      const sign = match[1] === '+' ? 1 : -1;
+      const offsetMs = sign * (parseInt(match[2], 10) * 60 + parseInt(match[3], 10)) * 60000;
+      datetime = isoSeconds(new Date(dtOriginal.getTime() - offsetMs)) + 'Z';
+    }
+  }
+
+  return { datetime, localDatetime };
+}
+
+// Offset (ms) of camera-local time relative to UTC, when both are known.
+function utcOffsetMs(entry) {
+  if (!entry.datetime || !entry.localDatetime) return null;
+  return Date.parse(entry.localDatetime + 'Z') - Date.parse(entry.datetime);
+}
+
+// Fill in whichever of datetime / localDatetime is missing, so every photo has a UTC
+// instant to sort by and a local time to display. The UTC offset is borrowed from the
+// nearest photo (in time) whose offset is known — usually the same phone in the same
+// time zone. With no such photo, fall back to a longitude-based guess (15° per hour).
+function fillMissingTimes(entries) {
+  const refs = entries
+    .map(e => ({ e, off: utcOffsetMs(e) }))
+    .filter(r => r.off != null);
+
+  const nearestOffset = (t, key) => {
+    let best = null, bestDiff = Infinity;
+    for (const r of refs) {
+      const diff = Math.abs(Date.parse(r.e[key] + (key === 'localDatetime' ? 'Z' : '')) - t);
+      if (diff < bestDiff) { bestDiff = diff; best = r.off; }
+    }
+    return best;
+  };
+  const guessOffset = e => (e.lng != null ? Math.round(e.lng / 15) * 3600000 : 0);
+
+  for (const e of entries) {
+    if (!e.datetime && e.localDatetime) {
+      const t = Date.parse(e.localDatetime + 'Z');
+      const off = nearestOffset(t, 'localDatetime') ?? guessOffset(e);
+      e.datetime = isoSeconds(new Date(t - off)) + 'Z';
+    } else if (e.datetime && !e.localDatetime) {
+      const t = Date.parse(e.datetime);
+      const off = nearestOffset(t, 'datetime') ?? guessOffset(e);
+      e.localDatetime = isoSeconds(new Date(t + off));
+    }
+  }
+}
+
+// Older photos.json entries stored camera-local time in `datetime` with no "Z".
+function normalizeCached(entry) {
+  if (!entry) return entry;
+  const out = { ...entry };
+  if (out.datetime && !out.datetime.endsWith('Z')) {
+    out.localDatetime ??= out.datetime.slice(0, 19);
+    out.datetime = null;
+  }
+  return out;
 }
 
 async function main() {
@@ -149,8 +234,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Load existing photos.json as a full metadata cache keyed by filename.
-  // This lets CI skip EXIF re-extraction for photos whose originals (HEIC) aren't committed.
+  // Load existing photos.json as a metadata cache keyed by filename. Used to keep GPS,
+  // times and reverse-geocode results that can't be re-derived from the file itself.
   const metaCache = {};
   if (existsSync(OUT_FILE)) {
     try {
@@ -188,15 +273,27 @@ async function main() {
   for (const file of imageFiles) {
     process.stdout.write(`  ${file} ... `);
 
-    const cached = metaCache[file];
-    // If we have a fully cached entry (has GPS or was confirmed no-GPS), skip EXIF extraction
-    const hasCachedMeta = cached && (cached.lat != null || cached.datetime != null);
+    const cached = normalizeCached(metaCache[file]);
 
-    let entry;
-    if (hasCachedMeta) {
-      entry = { ...cached };
-    } else {
-      entry = await processImage(file);
+    // Always call processImage so thumbnails are regenerated with current orientation.
+    // Fall back to cached GPS/times when EXIF can't supply them (e.g. a datetime that
+    // came from file mtime on an earlier local run — in CI, mtime is checkout time).
+    const entry = await processImage(file);
+    if (cached) {
+      if (entry.lat == null && cached.lat != null) { entry.lat = cached.lat; entry.lng = cached.lng; }
+      if (!entry.datetime && !entry.localDatetime) {
+        entry.datetime = cached.datetime ?? null;
+        entry.localDatetime = cached.localDatetime ?? null;
+      }
+    }
+
+    // Last resort: file modification time (a true UTC instant). iPhones set mtime to
+    // the capture time, so this is usually accurate for local runs.
+    if (!entry.datetime && !entry.localDatetime) {
+      try {
+        const s = await stat(path.join(DUMP_DIR, file));
+        entry.datetime = isoSeconds(s.mtime) + 'Z';
+      } catch {}
     }
 
     // Reverse geocode if GPS is available; use cache to skip re-fetching
@@ -213,13 +310,14 @@ async function main() {
     }
 
     const gpsStr = entry.lat != null ? (entry.location ?? `${entry.lat.toFixed(4)}, ${entry.lng.toFixed(4)}`) : 'no GPS';
-    const dtStr = entry.datetime ?? 'no datetime';
-    const source = hasCachedMeta ? '(cached)' : '';
-    console.log(`✓  (${gpsStr} | ${dtStr}) ${source}`.trimEnd());
+    const dtStr = entry.localDatetime ?? entry.datetime ?? 'no datetime';
+    console.log(`✓  (${gpsStr} | ${dtStr})`);
     results.push(entry);
   }
 
-  // Sort by datetime (nulls last)
+  fillMissingTimes(results);
+
+  // Sort by UTC datetime (nulls last)
   results.sort((a, b) => {
     if (!a.datetime && !b.datetime) return 0;
     if (!a.datetime) return 1;

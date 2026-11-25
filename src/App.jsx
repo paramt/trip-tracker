@@ -5,6 +5,10 @@ import Polaroid from './components/Polaroid';
 import rawPhotos from './data/photos.json';
 import rawRoute from './data/route.json';
 import { TRIP_START, TRIP_END, TRIP_LEGS, TRIP_TITLE, TRIP_DESCRIPTION, TRIP_LINKS, PAGE_TITLE, TRIP_DISTANCE_KM } from './trip.config.js';
+import * as tripConfig from './trip.config.js';
+
+// Optional config (older trip.config.js files may not define it)
+const DAY_START_HOUR = tripConfig.DAY_START_HOUR ?? 4;
 
 document.title = PAGE_TITLE;
 
@@ -28,7 +32,7 @@ function formatDayLabel(dateStr) {
   return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
 }
 
-function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
+function DayTimeline({ dayGroups, dayDistances, selectedDay, onSelectDay }) {
   if (!dayGroups.length) return null;
   return (
     <div className={`day-timeline${selectedDay != null ? ' day-timeline--has-selection' : ''}`}>
@@ -50,7 +54,10 @@ function DayTimeline({ dayGroups, selectedDay, onSelectDay }) {
                   {lastPhoto?.location && (
                     <div className="day-timeline-desc">{lastPhoto.location}</div>
                   )}
-                  <div className="day-timeline-count">{group.photos.length} photo{group.photos.length !== 1 ? 's' : ''}</div>
+                  <div className="day-timeline-count">
+                    {group.photos.length} photo{group.photos.length !== 1 ? 's' : ''}
+                    {dayDistances?.[i] > 0 ? ` · ${dayDistances[i]} km` : ''}
+                  </div>
                 </div>
               </div>
             </div>
@@ -153,6 +160,7 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
             <h2 className="sidebar-section-title">Generated Timeline</h2>
             <DayTimeline
               dayGroups={dayGroups}
+              dayDistances={dayDistances}
               selectedDay={selectedDay}
               onSelectDay={onSelectDay}
             />
@@ -190,10 +198,15 @@ function Sidebar({ open, onToggle, selectedDay, onSelectDay, distanceKm, tripTim
 
 // ── Module-level data ─────────────────────────────────────────────────────────
 
-function formatDate(datetime) {
-  if (!datetime) return null;
-  const d = new Date(datetime);
-  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+// Photo date as MM/DD/YY in the camera's local time (not the viewer's time zone).
+function formatDate(photo) {
+  const local = photo.localDatetime ?? (photo.datetime?.endsWith('Z') ? null : photo.datetime);
+  if (local) {
+    const [y, m, d] = local.slice(0, 10).split('-');
+    return `${m}/${d}/${y.slice(2)}`;
+  }
+  if (!photo.datetime) return null;
+  return new Date(photo.datetime).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
 }
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -217,11 +230,26 @@ const globalRoute = (() => {
     : [];
 })();
 
-// Group GPS photos by calendar day
+// Trip day for a photo, in camera-local time. Photos taken before DAY_START_HOUR count
+// toward the previous day, so a late night out stays on the day it started.
+function getTripDayKey(photo) {
+  const local = photo.localDatetime ?? photo.datetime;
+  if (!local) return 'unknown';
+  const date = local.slice(0, 10);
+  const hour = parseInt(local.slice(11, 13), 10);
+  if (hour < DAY_START_HOUR) {
+    const d = new Date(date + 'T12:00:00Z'); // UTC noon avoids DST edge cases
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+  return date;
+}
+
+// Group GPS photos by trip day
 const dayGroups = (() => {
   const map = {};
   gpsPhotos.forEach((photo, i) => {
-    const day = photo.datetime?.slice(0, 10) ?? 'unknown';
+    const day = getTripDayKey(photo);
     if (!map[day]) map[day] = { date: day, photos: [], firstPhotoIdx: i };
     map[day].photos.push(photo);
   });
@@ -247,8 +275,26 @@ const tripTime = (() => {
   return `${days}d ${hours}h`;
 })();
 
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
 // Nearest route point index for each GPS photo
 const routePts = globalRoute[0] ?? [];
+
+// Cumulative distance (km) along the route at each route point
+const routeCumDist = (() => {
+  if (!routePts.length) return [];
+  const dist = [0];
+  for (let i = 1; i < routePts.length; i++)
+    dist.push(dist[i - 1] + haversine(routePts[i - 1], routePts[i]));
+  return dist;
+})();
+
 const photoRouteIndices = routePts.length
   ? gpsPhotos.map(p => {
       let best = 0, bestDist = Infinity;
@@ -265,15 +311,27 @@ function lastPhotoIdx(dayIdx) {
   return g.firstPhotoIdx + g.photos.length - 1;
 }
 
-function highlightForDay(dayIdx) {
-  if (!routePts.length || dayIdx == null) return null;
-  // Start: last photo of previous day, or first photo of current day if day 0
+// Route indices covered by a day: from the previous day's last photo (or this day's
+// first photo for day 1) to this day's last photo
+function dayRouteRange(dayIdx) {
   const startIdx = dayIdx > 0 ? lastPhotoIdx(dayIdx - 1) : dayGroups[dayIdx].firstPhotoIdx;
   const endIdx = lastPhotoIdx(dayIdx);
   const r0 = photoRouteIndices[startIdx];
   const r1 = photoRouteIndices[endIdx];
-  const lo = Math.min(r0, r1);
-  const hi = Math.max(r0, r1);
+  return { startIdx, endIdx, lo: Math.min(r0, r1), hi: Math.max(r0, r1) };
+}
+
+// Kilometres driven each day, measured along the route
+const dayDistances = routeCumDist.length && photoRouteIndices.length
+  ? dayGroups.map((_, i) => {
+      const { lo, hi } = dayRouteRange(i);
+      return Math.round(routeCumDist[hi] - routeCumDist[lo]);
+    })
+  : [];
+
+function highlightForDay(dayIdx) {
+  if (!routePts.length || dayIdx == null) return null;
+  const { startIdx, endIdx, lo, hi } = dayRouteRange(dayIdx);
   // Single point — no segment to draw but still zoom to it
   if (startIdx === endIdx || lo === hi) return [gpsPhotos[startIdx]];
   return routePts.slice(lo, hi + 1);
@@ -288,6 +346,7 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState(null);
   const boundsRef = useRef(null);
   const zoomRef = useRef(5);
+  const overlayRef = useRef(null);
 
   const highlightRoute = useMemo(() => highlightForDay(selectedDay), [selectedDay]);
 
@@ -301,6 +360,29 @@ export default function App() {
       document.head.appendChild(link);
     });
   }, []);
+
+  useEffect(() => {
+    if (expandedPhoto) overlayRef.current?.focus();
+  }, [expandedPhoto]);
+
+  // Arrow keys step through photos in the expanded view; Escape closes it
+  useEffect(() => {
+    if (!expandedPhoto) return;
+    const idx = gpsPhotos.indexOf(expandedPhoto);
+    const handleKey = (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (idx < gpsPhotos.length - 1) setExpandedPhoto(gpsPhotos[idx + 1]);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (idx > 0) setExpandedPhoto(gpsPhotos[idx - 1]);
+      } else if (e.key === 'Escape') {
+        setExpandedPhoto(null);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [expandedPhoto]);
 
   const activePhoto = hoveredPhoto;
   const popupPos = activePhoto && boundsRef.current?.project ? (() => {
@@ -354,7 +436,7 @@ export default function App() {
                   src={activePhoto.thumb}
                   w={activePhoto.width}
                   h={activePhoto.height}
-                  date={formatDate(activePhoto.datetime)}
+                  date={formatDate(activePhoto)}
                   location={activePhoto.location ?? null}
                   rotate={activePhoto._rotate}
                   color
@@ -363,35 +445,47 @@ export default function App() {
                 />
               </div>
             )}
-            {expandedPhoto && (
-              <div
-                className="polaroid-overlay"
-                onClick={() => setExpandedPhoto(null)}
-              >
-                <button
-                  className="polaroid-overlay-close"
-                  onClick={() => setExpandedPhoto(null)}
-                  aria-label="Close"
-                >✕</button>
-                <div
-                  className="polaroid-expanded"
-                  style={expandedPhoto.width && expandedPhoto.height ? { '--photo-aspect': expandedPhoto.width / expandedPhoto.height } : undefined}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <Polaroid
-                    src={expandedPhoto.file}
-                    thumb={expandedPhoto.thumb}
-                    w={expandedPhoto.width}
-                    h={expandedPhoto.height}
-                    date={formatDate(expandedPhoto.datetime)}
-                    location={expandedPhoto.location ?? null}
-                    rotate={expandedPhoto._rotate}
-                    color
-                    tack={false}
-                  />
+            {expandedPhoto && (() => {
+              const idx = gpsPhotos.indexOf(expandedPhoto);
+              const hasPrev = idx > 0;
+              const hasNext = idx < gpsPhotos.length - 1;
+              return (
+                <div className="polaroid-overlay" ref={overlayRef} tabIndex={-1} onClick={() => setExpandedPhoto(null)}>
+                  <button className="polaroid-overlay-close" onClick={() => setExpandedPhoto(null)} aria-label="Close">✕</button>
+                  <div className="polaroid-overlay-inner" onClick={e => e.stopPropagation()}>
+                    <button
+                      className="polaroid-nav polaroid-nav-prev"
+                      onClick={() => hasPrev && setExpandedPhoto(gpsPhotos[idx - 1])}
+                      aria-label="Previous photo"
+                      disabled={!hasPrev}
+                    ><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                    <div
+                      key={expandedPhoto.file}
+                      className="polaroid-expanded"
+                      style={expandedPhoto.width && expandedPhoto.height ? { '--photo-aspect': expandedPhoto.width / expandedPhoto.height } : undefined}
+                    >
+                      <Polaroid
+                        src={expandedPhoto.file}
+                        thumb={expandedPhoto.thumb}
+                        w={expandedPhoto.width}
+                        h={expandedPhoto.height}
+                        date={formatDate(expandedPhoto)}
+                        location={expandedPhoto.location ?? null}
+                        rotate={expandedPhoto._rotate}
+                        color
+                        tack={false}
+                      />
+                    </div>
+                    <button
+                      className="polaroid-nav polaroid-nav-next"
+                      onClick={() => hasNext && setExpandedPhoto(gpsPhotos[idx + 1])}
+                      aria-label="Next photo"
+                      disabled={!hasNext}
+                    ><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>

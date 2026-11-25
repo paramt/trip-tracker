@@ -126,7 +126,9 @@ scripts/
 
 
 - Photos without GPS are included in the sidebar timeline but not plotted on the map
-- HEIC files are automatically converted to JPG during processing; the originals are not deleted
+- HEIC files are automatically converted to JPG during processing; the originals are not deleted (in Drive mode, HEIC files are converted to JPG when downloaded, keeping their EXIF data)
+- Photos are ordered by their GPS (UTC) timestamp, so trips across time zones stay in order; dates are shown in the photo's local time
+- Timeline days start at `DAY_START_HOUR` (default 4am), so late-night photos count toward the previous day
 - The route is cached by a hash of your waypoints — it only re-fetches from ORS when photos change
 - The free ORS tier supports up to ~50 waypoints per request; the script batches automatically for longer trips
 - Sidebar stats (Photos, Cities, States/Provinces) come from `photos.json`; Distance Covered comes from `route.json`. If ORS has never succeeded, the stats section is hidden. If ORS fails on a re-run, the previous distance and route are shown unchanged — stale but consistent
